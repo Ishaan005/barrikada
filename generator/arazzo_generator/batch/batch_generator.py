@@ -5,6 +5,7 @@ Batch processor for generating Arazzo workflows from multiple OpenAPI specificat
 import os
 import time
 from datetime import datetime
+from tqdm import tqdm
 
 from arazzo_generator.generator.generator_service import generate_arazzo
 from arazzo_generator.utils.config import get_config, get_project_root
@@ -25,6 +26,7 @@ class BatchProcessor:
         max_retries: int = 3,
         save_logs: bool = True,
         output_format: str = "json",
+        quiet: bool = False,
     ):
         """
         Initialize the batch processor.
@@ -36,6 +38,7 @@ class BatchProcessor:
             summary_file: Path to the summary file
             max_retries: Maximum number of retries for failed specifications
             save_logs: If True, save LLM logs to batch_logs directory
+            quiet: If True, disable progress bar and minimize output
         """
         # Store LLM configuration
         self.llm_provider = llm_provider
@@ -65,6 +68,7 @@ class BatchProcessor:
 
         self.max_retries = max_retries
         self.save_logs = save_logs
+        self.quiet = quiet
         self.output_format = output_format.lower()
         if self.output_format not in ("json", "yaml"):
             self.output_format = "json"  # Default to json if invalid format provided
@@ -312,7 +316,31 @@ class BatchProcessor:
         self.logger.info(f"Processing {len(spec_list)} OpenAPI specifications")
 
         success_count = 0
-        for i, spec_path in enumerate(spec_list):
+        failed_count = 0
+        
+        # Create progress bar or not, if quiet mode
+        progress = None
+        if self.quiet:
+            # In quiet mode, skip progress bar
+            spec_iterator = enumerate(spec_list)
+        else:
+            # Show progress bar
+            progress = tqdm(
+                spec_list,
+                desc="Processing OpenAPI specifications",
+                unit="file",
+                bar_format='{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+            )
+            spec_iterator = enumerate(progress)
+        
+        for i, spec_path in spec_iterator:
+            current_file = os.path.basename(spec_path)
+            
+            # Show current file being processed
+            if not self.quiet and progress:
+                progress.write(f"Currently processing: {current_file}")
+                progress.set_postfix(file=current_file)
+            
             # Convert force flag to skip_existing (force=True means skip_existing=False)
             skip_existing = not force
             success, summary_data = self.process_single_spec(
@@ -324,8 +352,12 @@ class BatchProcessor:
                 direct_llm=False,
                 llm_model=self.llm_model,
             )
+            
+            # Update counters
             if success and summary_data.get("status") in ["success", "skipped"]:
                 success_count += 1
+            else:
+                failed_count += 1
 
             # Write summary entry
             if self.summary_file:
@@ -344,6 +376,14 @@ class BatchProcessor:
                 self.logger.info(f"Waiting {delay_between_specs}s before next file...")
                 time.sleep(delay_between_specs)
 
+        # Close progress bar and show final summary (only if not quiet)
+        if not self.quiet and progress:
+            progress.close()
+        
+        # Print final summary with emojis (only if not quiet)
+        if not self.quiet:
+            print(f"✅ Processed {success_count} successfully, ❌ {failed_count} failed")
+        
         self.logger.info(
             f"Processed {success_count} of {len(spec_list)} specifications successfully"
         )

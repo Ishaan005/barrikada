@@ -187,6 +187,7 @@ def validate(file: str):
 )
 @click.option("--save-logs/--no-logs", default=True, help="Save LLM logs to logs directory")
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
+@click.option("--quiet", is_flag=True, help="Disable progress bar and minimize output")
 @click.option("--spec-list", help="Process specifications from a file list")
 @click.option("--all", is_flag=True, help="Process all specs in the directory")
 @click.option(
@@ -203,6 +204,7 @@ def batch(
     force,
     save_logs,
     verbose,
+    quiet,
     spec_list,
     all,
     format,
@@ -219,6 +221,7 @@ def batch(
         "summary_file": summary_file,
         "save_logs": save_logs,
         "output_format": format,
+        "quiet": quiet,
     }
 
     # Only add LLM config if both provider and model are provided

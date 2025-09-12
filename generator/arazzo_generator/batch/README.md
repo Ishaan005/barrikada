@@ -46,6 +46,9 @@ pdm run batch --spec-list /path/to/spec-list.txt
 
 # Enable verbose logging
 --verbose
+
+# Disable progress bar
+--quiet
 ```
 
 ### Programmatic Usage
