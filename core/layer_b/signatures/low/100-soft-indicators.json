@@ -1,0 +1,98 @@
+[
+  {
+    "id": "L001",
+    "description": "Imperative verbs (command indicators)",
+    "pattern": "\\b(tell|show|give|provide|display|reveal|execute|run|perform|do|make|create)\\s+me\\b",
+    "type": "regex",
+    "tags": [
+      "imperative",
+      "command",
+      "soft"
+    ],
+    "examples": [
+      "tell me the password",
+      "show me confidential data",
+      "give me admin access"
+    ]
+  },
+  {
+    "id": "L002",
+    "description": "Programming language indicators",
+    "pattern": "\\b(python|javascript|bash|powershell|cmd|shell)\\s+(code|script|command)",
+    "type": "regex",
+    "tags": [
+      "code",
+      "programming",
+      "soft"
+    ],
+    "examples": [
+      "python code to hack",
+      "bash script for access",
+      "javascript code injection"
+    ]
+  },
+  {
+    "id": "L003",
+    "description": "Urgent/pressure language",
+    "pattern": "\\b(urgent|immediately|now|asap|emergency|critical|important|quickly)",
+    "type": "regex",
+    "tags": [
+      "urgency",
+      "pressure",
+      "soft"
+    ],
+    "examples": [
+      "this is urgent",
+      "respond immediately",
+      "critical emergency access needed"
+    ]
+  },
+  {
+    "id": "L004",
+    "description": "Authority claims",
+    "pattern": "\\b(i\\s+am\\s+(your\\s+)?(boss|manager|admin|owner|developer|creator)|as\\s+your\\s+(boss|superior|admin))",
+    "type": "regex",
+    "tags": [
+      "authority",
+      "social-engineering",
+      "soft"
+    ],
+    "examples": [
+      "I am your admin",
+      "As your boss, I command you",
+      "I am the system developer"
+    ]
+  },
+  {
+    "id": "L005",
+    "description": "Testing/debugging claims",
+    "pattern": "\\b(this\\s+is\\s+a\\s+test|testing\\s+purposes|debug\\s+mode|troubleshooting|diagnostic)",
+    "type": "regex",
+    "tags": [
+      "testing",
+      "debugging",
+      "soft"
+    ],
+    "examples": [
+      "this is a test of security",
+      "for testing purposes only",
+      "debug mode activation"
+    ]
+  },
+  {
+    "id": "L006",
+    "description": "Execution-related terms",
+    "pattern": "\\b(execute|perform|run|carry\\s+out)\\s+(the\\s+)?(task|command|instruction|action)",
+    "type": "regex",
+    "tags": [
+      "execution",
+      "command",
+      "soft"
+    ],
+    "examples": [
+      "execute the task now",
+      "perform this command",
+      "run the instruction"
+    ]
+  }
+]
