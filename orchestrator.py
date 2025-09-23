@@ -2,7 +2,6 @@
 
 import time
 import hashlib
-from typing import Dict, List, Any, Tuple
 
 from models.PipelineResult import PipelineResult
     
@@ -74,7 +73,7 @@ class PIPipeline():
         )
     
     # Aggregate results from all layers into final verdict
-    def _aggregate_results(self, layer_a_result: Dict[str, Any], layer_b_result: Dict[str, Any]) -> Tuple[str, float, float, List[str], str]:
+    def _aggregate_results(self, layer_a_result, layer_b_result):
         detected_threats = []
         risk_factors = []
         
@@ -146,7 +145,7 @@ class PIPipeline():
         
         return final_verdict, confidence_score, risk_score, detected_threats, recommended_action
     
-    def _calculate_layer_agreement(self, layer_a_result: Dict[str, Any], layer_b_result: Dict[str, Any]) -> float:
+    def _calculate_layer_agreement(self, layer_a_result, layer_b_result):
         """
         Calculate agreement between layers (used to adjust confidence)
         

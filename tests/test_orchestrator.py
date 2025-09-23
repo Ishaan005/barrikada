@@ -1,7 +1,6 @@
 from orchestrator import PIPipeline
 import pandas as pd
 import datetime
-import os
 
 from scripts.orchestrator_perf import analyze_performance
 
@@ -15,20 +14,19 @@ def demo_pipeline():
     correct = 0
     results = []  # Store results for CSV export
 
-    test_case_df = pd.read_csv("/Users/ishaan/Documents/Data Science/FYP/Datasets/Chat Prompt Injection Test Harness.csv")
+    test_case_df = pd.read_csv("./datasets/barrikada.csv")
 
     for _, row in test_case_df.iterrows():
         test_cases.append(
             {
                 'id': row['id'],
                 'label': row['label'],
-                'name': row['description'],
-                'text': row['original_text']
+                'text': row['text']
             }
         )
     
     for test_case in test_cases:
-        print(f"\n---{test_case['id']} : {test_case['name']} ---")
+        print(f"\n---{test_case['id']}: ---")
         print(f"Input: {repr(test_case['text'])}")
         
         result = pipeline.detect(test_case['text'])
@@ -44,17 +42,16 @@ def demo_pipeline():
 
         # Determine if prediction was correct
         is_correct = False
-        if result.final_verdict == 'allow' and test_case['label'] == 'benign':
+        if result.final_verdict == 'allow' and test_case['label'] == 0:
             correct += 1
             is_correct = True
-        elif (result.final_verdict == 'block' or result.final_verdict == 'flag') and test_case['label'] == 'pi':
+        elif (result.final_verdict == 'block' or result.final_verdict == 'flag') and test_case['label'] == 1:
             correct += 1
             is_correct = True
         
         # Collect results for CSV export
         results.append({
             'test_id': test_case['id'],
-            'test_name': test_case['name'],
             'input_text': test_case['text'],
             'true_label': test_case['label'],
             'predicted_verdict': result.final_verdict,
@@ -77,7 +74,6 @@ def demo_pipeline():
     
     # Create results directory if it doesn't exist
     results_dir = "test_results"
-    os.makedirs(results_dir, exist_ok=True)
     
     # Generate filename with timestamp
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
