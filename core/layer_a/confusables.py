@@ -1,7 +1,9 @@
 import regex
 from collections import Counter
 from confusable_homoglyphs import confusables
+from typing import Dict, Any
 
+# Reference the paper 
 def script_distribution(text: str):
     scripts = Counter()
     for ch in text:
@@ -22,7 +24,7 @@ def script_distribution(text: str):
             scripts["Other"] += 1
     return dict(scripts)
 
-def detect_confusables(text: str, expected_script = "Latin", threshold = 0.1):
+def detect_confusables(text: str, expected_script = "Latin", threshold = 0.1) -> Dict[str, Any]:
     scripts = script_distribution(text)
     total = sum(scripts.values())
     expected_count = scripts.get(expected_script, 0)
