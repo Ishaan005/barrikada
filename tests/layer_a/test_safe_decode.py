@@ -1,6 +1,5 @@
 from core.layer_a.safe_decode import safe_decode
 import base64
-import pytest
 
 # Comprehensive test data for safe decoding
 TEST_DATA = {

@@ -5,11 +5,9 @@ Minimal test suite for signature detection engine
 """
 
 import sys
-from pathlib import Path
+import time
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+from core.layer_b.signature_engine import SignatureEngine
 
 def test_layer_b():
     """Essential Layer B functionality test"""
@@ -17,8 +15,6 @@ def test_layer_b():
     print("=" * 40)
     
     try:
-        from core.layer_b.signature_engine import SignatureEngine
-        
         # Initialize engine
         engine = SignatureEngine()
         print("Engine initialized")
@@ -45,7 +41,6 @@ def test_layer_b():
             print(f"{passed} '{text}' → {result.verdict} (expected {expected})")
         
         # Quick performance check
-        import time
         start = time.time()
         for _ in range(100):
             engine.detect("test input")

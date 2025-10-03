@@ -2,7 +2,7 @@
 from core.layer_a.safe_decode import safe_decode
 from core.layer_a.unicode import normalize_uniccode  
 from core.layer_a.confusables import detect_confusables
-from core.layer_a.strip import strip_suspicious_characters
+from core.layer_a.strip.strip import strip_suspicious_characters
 from core.layer_a.normalise_punctuation import normalise_punctuation_and_whitespace
 from core.layer_a.detect_encodings import detect_and_decode_embedded
 

@@ -4,7 +4,7 @@ import datetime
 
 from scripts.orchestrator_perf import analyze_performance
 
-def demo_pipeline():
+def test_pipeline():
     print("Orchestrator Demo")
     print()
     
@@ -128,4 +128,4 @@ def demo_pipeline():
     # print(f"Layer B average: {perf_stats['layer_b_time_ms']['avg']:.2f}ms")
 
 if __name__ == "__main__":
-    demo_pipeline()
+    test_pipeline()

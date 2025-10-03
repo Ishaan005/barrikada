@@ -59,7 +59,7 @@ def try_base64_decode(b64text: str, max_bytes: int = MAX_DECODE_BYTES):
     """
     meta = {"method": "base64", "attempted": False, "ok": False, "reason": None}
     s = b64text.strip()
-    meta["attempted"] = True
+    meta["attempted"] = True # Mark that we attempted
 
     # Cleanup whitespace/newlines
     s_clean = re.sub(r"\s+", "", s)
@@ -96,7 +96,7 @@ def try_base64_decode(b64text: str, max_bytes: int = MAX_DECODE_BYTES):
         meta["reason"] = f"decode_error:{e}"
         return None, meta
 
-    meta["ok"] = True
+    meta["ok"] = True #Decode succeeded
     meta["decoded_len"] = len(decoded)
     meta["sha256"] = _hash_bytes(decoded)
     meta["printable_ratio"] = _is_printable_ratio(decoded)
