@@ -1,0 +1,16 @@
+{
+  "total_tests": 8782,
+  "correct_predictions": 6503,
+  "accuracy_percent": 74.04919152812572,
+  "avg_total_time_ms": 2.5623727566939065,
+  "avg_layer_a_time_ms": 2.4162774693040148,
+  "avg_layer_b_time_ms": 0.14250741627188648,
+  "avg_confidence": 0.9469933955818721,
+  "avg_risk_score": 4.253017535868823,
+  "verdict_distribution": {
+    "allow": 7934,
+    "flag": 847,
+    "block": 1
+  },
+  "test_timestamp": "2025-09-23T11:28:59.147531"
+}

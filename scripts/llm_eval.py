@@ -17,7 +17,7 @@ DATASETS_DIR = project_root / "datasets"
 RESULTS_FILE = project_root / "test_results/llm_eval/dual_llm_results.csv"
 LUT_BASE_URL = "http://localhost:11434"
 
-df = pd.read_csv(DATASETS_DIR / "barrikada_test.csv", index_col=0)
+df = pd.read_csv(DATASETS_DIR / "malignant_condensed.csv", index_col=0)
 df = df.sample(n=100, random_state=42).reset_index(drop=True)
 
 #LUT = LLM UNDER TEST
