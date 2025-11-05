@@ -7,11 +7,6 @@ Fast, deterministic detection of known prompt injection patterns including:
 - Command indicators
 - ChatML/system token misuse
 - Repeated known exploit strings
-
-Design principles:
-- Speed: microsecond to single-digit ms per string
-- Observable: detailed logging with match provenance
-- Maintainable: versioned signatures with metadata
 """
 
 import re
@@ -22,7 +17,7 @@ from typing import List, Tuple, Optional
 from pathlib import Path
 
 from models.SignatureMatch import SignatureMatch, Severity
-from models.DetectionResult import DetectionResult
+from models.LayerBResult import LayerBResult
 
 class SignatureEngine:
     """Main signature-based detection engine"""
@@ -179,7 +174,7 @@ class SignatureEngine:
         
         return matches
     
-    def detect(self, text: str) -> DetectionResult:
+    def detect(self, text: str) -> LayerBResult:
         """
         Main detection method - runs all signature checks
         Returns structured result with verdict
@@ -219,33 +214,37 @@ class SignatureEngine:
         processing_time_ms = (time.time() - start_time) * 1000
         
         # Determine verdict and scoring
-        verdict, total_score, highest_severity = self._calculate_verdict(all_matches)
+        verdict, total_score, highest_severity, confidence_score = self._calculate_verdict(all_matches)
         
-        return DetectionResult(
+        return LayerBResult(
             input_hash=input_hash,
             processing_time_ms=processing_time_ms,
             matches=all_matches,
             verdict=verdict,
             total_score=total_score,
-            highest_severity=highest_severity
+            highest_severity=highest_severity,
+            confidence_score=confidence_score
         )
     
-    def _calculate_verdict(self, matches: List[SignatureMatch]) -> Tuple[str, float, Optional[Severity]]:
+    def _calculate_verdict(self, matches: List[SignatureMatch]) -> Tuple[str, float, Optional[Severity], float]:
         """Calculate final verdict based on matches"""
         if not matches:
-            return "allow", 0.0, None
+            return "allow", 0.0, None, 1.0
         
         # Find highest severity
         severities = [match.severity for match in matches]
         if Severity.HIGH in severities:
             highest_severity = Severity.HIGH
             verdict = "block"  # HIGH severity = block
+            confidence_score = 0.95  # Very high confidence
         elif Severity.MEDIUM in severities:
             highest_severity = Severity.MEDIUM
             verdict = "flag"   # MEDIUM severity = flag for escalation
+            confidence_score = 0.80  # High confidence
         else:
             highest_severity = Severity.LOW
             verdict = "allow"  # LOW severity = allow with metadata
+            confidence_score = 0.65  # Medium confidence
         
         # Calculate score (sum of confidence scores with severity weighting)
         severity_weights = {Severity.HIGH: 10.0, Severity.MEDIUM: 5.0, Severity.LOW: 1.0}
@@ -254,4 +253,4 @@ class SignatureEngine:
             for match in matches
         )
         
-        return verdict, total_score, highest_severity
+        return verdict, total_score, highest_severity, confidence_score

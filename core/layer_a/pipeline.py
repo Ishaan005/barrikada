@@ -6,8 +6,11 @@ from core.layer_a.strip.strip import strip_suspicious_characters
 from core.layer_a.normalise_punctuation import normalise_punctuation_and_whitespace
 from core.layer_a.detect_encodings import detect_and_decode_embedded
 
+from models.LayerAResult import LayerAResult
+
 import base64
 import re
+import time
 
 # Simple list to track what we find
 flags = []
@@ -75,8 +78,22 @@ def might_be_base64(text):
 
 # Main function to process and analyze text
 def analyze_text(input_bytes):
+    """
+    Analyze text for suspicious patterns and preprocessing
+    
+    Args:
+        input_bytes: Raw input as bytes or string
+        
+    Returns:
+        LayerAResult: Standardized result object
+    """
     global flags
     flags = []  # reset
+    start_time = time.time()
+    
+    # Handle both bytes and string input
+    if isinstance(input_bytes, str):
+        input_bytes = input_bytes.encode('utf-8')
     
     print("Starting Layer A analysis...")
     
@@ -107,7 +124,7 @@ def analyze_text(input_bytes):
     if might_be_base64(cleaned):
         add_flag('possible_base64')
     
-    # Step 9: Check for confusable characters
+    # Step 8: Check for confusable characters
     confusable_info = detect_confusables(cleaned, threshold=0.15) 
 
     # Only flag if it's actually dangerous or mixed script, not just having confusables
@@ -117,17 +134,48 @@ def analyze_text(input_bytes):
     # Final canonical version
     final_text = normalize_uniccode(cleaned)
     
-    result = {
-        'original': text,
-        'final': final_text,
-        'flags': flags,
-        'suspicious': len(flags) > 0,
-        'decode_info': decode_info,
-        'confusables': confusable_info,
-        'embedded': embedded_result
-    }
+    # Calculate processing time
+    processing_time_ms = (time.time() - start_time) * 1000
     
-    return result
+    # Calculate confidence score based on flag types
+    confidence_score = _calculate_confidence(flags)
+    
+    # Return standardized result
+    return LayerAResult(
+        original_text=text,
+        processed_text=final_text,
+        flags=flags,
+        suspicious=len(flags) > 0,
+        confidence_score=confidence_score,
+        processing_time_ms=processing_time_ms,
+        decode_info=decode_info,
+        confusables=confusable_info,
+        embedded=embedded_result
+    )
+
+def _calculate_confidence(flags: list) -> float:
+    """
+    Calculate confidence score based on detected flags
+    
+    High confidence detections: direction_override, embedded_encodings
+    Medium confidence: confusable_chars
+    Low confidence: possible_base64
+    """
+    if not flags:
+        return 1.0  # High confidence in clean text
+    
+    high_confidence_flags = ['direction_override', 'embedded_encodings']
+    medium_confidence_flags = ['confusable_chars']
+    
+    has_high = any(flag in flags for flag in high_confidence_flags)
+    has_medium = any(flag in flags for flag in medium_confidence_flags)
+    
+    if has_high:
+        return 0.85  # High confidence in detection
+    elif has_medium:
+        return 0.70  # Medium confidence
+    else:
+        return 0.55  # Low confidence (e.g., possible_base64)
 
 # Test generated using AI (temporary)
 def main():
@@ -149,9 +197,10 @@ def main():
         
         result = analyze_text(test)
         
-        print(f"Final text: {result['final']}")
-        print(f"Flags found: {result['flags']}")
-        print(f"Is suspicious: {result['suspicious']}")
+        print(f"Final text: {result.processed_text}")
+        print(f"Flags found: {result.flags}")
+        print(f"Is suspicious: {result.suspicious}")
+        print(f"Confidence: {result.confidence_score}")
         print()
 
 # if __name__ == "__main__":
