@@ -1,4 +1,4 @@
-from orchestrator import PIPipeline
+from core.orchestrator import PIPipeline
 
 def analyze_performance(input_text: str, num_runs: int = 100):
         """

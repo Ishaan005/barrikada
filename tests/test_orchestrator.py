@@ -1,4 +1,4 @@
-from orchestrator import PIPipeline
+from core.orchestrator import PIPipeline
 import pandas as pd
 import datetime
 
@@ -14,19 +14,17 @@ def test_pipeline():
     correct = 0
     results = []  # Store results for CSV export
 
-    test_case_df = pd.read_csv("./datasets/barrikada.csv")
+    test_case_df = pd.read_csv("datasets/barrikada_test.csv")
 
     for _, row in test_case_df.iterrows():
         test_cases.append(
             {
-                'id': row['id'],
                 'label': row['label'],
                 'text': row['text']
             }
         )
     
     for test_case in test_cases:
-        print(f"\n---{test_case['id']}: ---")
         print(f"Input: {repr(test_case['text'])}")
         
         result = pipeline.detect(test_case['text'])
@@ -51,7 +49,6 @@ def test_pipeline():
         
         # Collect results for CSV export
         results.append({
-            'test_id': test_case['id'],
             'input_text': test_case['text'],
             'true_label': test_case['label'],
             'predicted_verdict': result.final_verdict,
