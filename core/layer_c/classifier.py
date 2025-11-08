@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import time
+import math
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
@@ -19,6 +20,7 @@ from sklearn.pipeline import Pipeline
 
 from core.settings import Settings
 from models.LayerCResult import LayerCResult
+from plotter import *
 
 settings = Settings()
 
@@ -27,7 +29,7 @@ MODEL_PATH = settings.model_path
 VECTORIZER_PATH = settings.vectorizer_path
 
 class Classifier:
-    def __init__(self, vectorizer_path, model_path, low = 0.25, high = 0.75):
+    def __init__(self, vectorizer_path, model_path, low = 0.35, high = 0.85):
         self.vectorizer = joblib.load(vectorizer_path)
         self.model = joblib.load(model_path)
         self.low_threshold = low
@@ -66,6 +68,13 @@ class Classifier:
         joblib.dump(clf, MODEL_PATH)
         joblib.dump(vectorizer, VECTORIZER_PATH)
         print("Model and vectorizer saved.")
+        
+        return {
+            'y_test': y_test,
+            'y_pred': y_pred,
+            'y_proba': y_proba,
+            'X_test': X_test
+        }
 
     def predict(self, input_text: str) -> LayerCResult:
         """
@@ -79,9 +88,13 @@ class Classifier:
         """
         start_time = time.time()
         
-        # Vectorize and predict
+        # Vectorize and predict using LinearSVC
         vec = self.vectorizer.transform([input_text])
-        probability_score = float(self.model.predict_proba(vec)[0, 1])
+        
+        # LinearSVC uses decision_function, normalize to [0, 1] range using sigmoid
+        decision_score = float(self.model.decision_function(vec)[0])
+        # Apply sigmoid to convert decision score to probability-like score
+        probability_score = 1.0 / (1.0 + math.exp(-decision_score))
 
         # Determine verdict based on thresholds
         if probability_score < self.low_threshold:
@@ -104,7 +117,6 @@ class Classifier:
             confidence_score=confidence_score,
             processing_time_ms=processing_time_ms
         )
-
 
 if __name__ == "__main__":
     """
@@ -129,4 +141,80 @@ if __name__ == "__main__":
     ])
     
     # Call the train method
-    classifier.train()
+    train_results = classifier.train()
+    
+    # Plot training results
+    print("\n" + "=" * 60)
+    print("Generating Training Analysis Plots")
+    print("=" * 60)
+    plot_training_results(train_results)
+
+    # Now properly initialize the classifier to load the saved models
+    print("\n" + "=" * 60)
+    print("Testing Classifier on Test Set")
+    print("=" * 60 + "\n")
+    
+    classifier = Classifier(
+        vectorizer_path=settings.vectorizer_path,
+        model_path=settings.model_path,
+        low=0.25,
+        high=0.75
+    )
+    
+    # Run predictions on test set
+    test_df = pd.read_csv("../../datasets/barrikada_test.csv")
+    test_results = []
+    
+    print("Running predictions on test set...")
+    for index, row in test_df.iterrows():
+        text = row['text']
+        label = row['label']
+        result = classifier.predict(input_text=text)
+        
+        test_results.append({
+            'text': text,
+            'true_label': label,
+            'verdict': result.verdict,
+            "is_correct": (result.verdict == 'allow' and label == 0) or ((result.verdict in ['block', 'flag']) and label == 1),
+            'probability_score': result.probability_score,
+            'confidence_score': result.confidence_score,
+            'processing_time_ms': result.processing_time_ms
+        })
+        
+        # Print first 5 examples
+        if index < 5: #type:ignore
+            print(f"\nExample {index + 1}:") #type: ignore
+            print(f"  Text: {text[:80]}...")
+            print(f"  True Label: {'Malicious' if label == 1 else 'Safe'}")
+            print(f"  Verdict: {result.verdict}")
+            print(f"  Probability: {result.probability_score:.4f}")
+            print(f"  Confidence: {result.confidence_score:.4f}")
+    
+    # Create DataFrame and plot results
+    test_results_df = pd.DataFrame(test_results)
+    
+    print("\n" + "=" * 60)
+    print("Generating Test Results Analysis Plots")
+    print("=" * 60)
+    test_metrics = plot_test_results(test_results_df)
+    
+    # Print summary
+    print("\n" + "=" * 60)
+    print("FINAL SUMMARY")
+    print("=" * 60)
+    print(f"Test Set Accuracy: {test_metrics['accuracy']:.2%}")
+    print(f"Total Predictions: {test_metrics['total']}")
+    print(f"Correct Predictions: {test_metrics['correct']}")
+    print(f"Verdict Distribution: {test_metrics['verdict_distribution']}")
+    print(f"\nAverage Processing Time: {test_results_df['processing_time_ms'].mean():.2f}ms")
+    print(f"Average Confidence Score: {test_results_df['confidence_score'].mean():.4f}")
+    
+    # Save test results to CSV
+    output_csv = Path(__file__).parent / "models" / "test_results.csv"
+    test_results_df.to_csv(output_csv, index=False)
+    print(f"\nTest results saved to: {output_csv}")
+    
+    # Run detailed error analysis
+    print("\n")
+    error_analysis = analyze_errors(classifier, test_results_df)
+
