@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from .SignatureMatch import SignatureMatch, Severity
 
@@ -16,6 +16,10 @@ class LayerBResult:
     # Processing metadata
     processing_time_ms: float
     input_hash: str
+
+    # Allow-listing metadata (used for early termination / skipping later layers)
+    allowlisted: bool = False
+    allowlist_rules: List[str] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
@@ -39,7 +43,9 @@ class LayerBResult:
             'verdict': self.verdict,
             'total_score': self.total_score,
             'highest_severity': self.highest_severity.value if self.highest_severity else None,
-            'confidence_score': self.confidence_score
+            'confidence_score': self.confidence_score,
+            'allowlisted': self.allowlisted,
+            'allowlist_rules': list(self.allowlist_rules),
         }
     
     def get_risk_score(self) -> float:
@@ -56,7 +62,7 @@ class LayerBResult:
         # Base risk on highest severity
         base_risk = severity_weights.get(self.highest_severity, 0.0) if self.highest_severity else 0.0
         
-        # Add incremental risk for multiple matches (with diminishing returns)
+        # Add incremental risk for multiple matches
         match_count_bonus = min(20.0, len(self.matches) * 5.0)
         
         return min(100.0, base_risk + match_count_bonus)
