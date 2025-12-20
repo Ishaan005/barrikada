@@ -1,5 +1,7 @@
 from dataclasses import dataclass
-from typing import Dict, Any, List
+from typing import Any, Dict
+
+from models.verdicts import DecisionLayer, FinalVerdict
 
 @dataclass
 class PipelineResult:
@@ -18,12 +20,10 @@ class PipelineResult:
     layer_c_result: Dict[str, Any] | None
     layer_c_time_ms: float | None
     
-    # Final aggregated results
-    final_verdict: str | None # "allow", "flag", "block" 
-    confidence_score: float | None  # 0.0 to 1.0
-    risk_score: float | None  # 0 to 100
-    detected_threats: List[str] | None
-    recommended_action: str | None
+    # Final decision (decision cascade)
+    final_verdict: FinalVerdict
+    decision_layer: DecisionLayer  # "A", "B", or "C"
+    confidence_score: float  # confidence of the deciding layer
 
     def to_dict(self) -> Dict[str, Any]:
         #Convert to dictionary for outpput
@@ -36,9 +36,7 @@ class PipelineResult:
             'layer_b_time_ms': self.layer_b_time_ms,
             'layer_c_result': self.layer_c_result,
             'layer_c_time_ms': self.layer_c_time_ms,
-            'final_verdict': self.final_verdict,
+            'final_verdict': self.final_verdict.value,
+            'decision_layer': self.decision_layer.value,
             'confidence_score': self.confidence_score,
-            'risk_score': self.risk_score,
-            'detected_threats': self.detected_threats,
-            'recommended_action': self.recommended_action
         }
