@@ -11,8 +11,8 @@ class SignatureEngine:
     
     def __init__(self):
         self.signatures_dir = Path(__file__).parent / "signatures" / "extracted"
-        self.yara_rules = {}
-        self.allow_rules = None
+        self.malicious_rules: Optional[yara.Rules] = None
+        self.allow_rules: Optional[yara.Rules] = None
         self._load_signatures()
     
     def _load_signatures(self):
@@ -26,11 +26,18 @@ class SignatureEngine:
                 "to generate core/layer_b/signatures/extracted/malicious_block_high_signatures.yar"
             )
 
-        self.yara_rules = {Severity.HIGH: yara.compile(filepath=str(extracted_high))}
-        print(f"Loaded extracted HIGH signatures: {extracted_high.name}")
+        self.malicious_rules = yara.compile(filepath=str(extracted_high))
+        print(f"Loaded extracted MALICIOUS signatures: {extracted_high.name}")
 
-        self.allow_rules = yara.compile(filepath=str(extracted_allow))
-        print(f"Loaded extracted SAFE allow signatures: {extracted_allow.name}")
+        if extracted_allow.exists():
+            self.allow_rules = yara.compile(filepath=str(extracted_allow))
+            print(f"Loaded extracted SAFE allow signatures: {extracted_allow.name}")
+        else:
+            # Allowlisting is an optimization; pipeline remains correct without it.
+            self.allow_rules = None
+            print(f"SAFE allow signatures not found ({extracted_allow.name}); "
+                    "allowlisting disabled."
+            )
 
 
     def _is_allowlisted(self, text: str) -> Tuple[bool, List[str]]:
@@ -45,37 +52,41 @@ class SignatureEngine:
             print(f"YARA allowlisting error: {e}")
             return False, []
 
-    
-    def _match_yara(self, text: str, severity: Severity):
-        matches = []
-        # if severity not in self.yara_rules or self.yara_rules[severity] is None:
-        #     return matches
-        
+
+    def _match_malicious_yara(self, text: str) -> List[SignatureMatch]:
+        """Match extracted malicious YARA rules.
+
+        Note: extracted signatures are treated as MALICIOUS indicators.
+        """
+        if self.malicious_rules is None:
+            return []
+
+        matches: List[SignatureMatch] = []
         try:
-            yara_matches = self.yara_rules[severity].match(data=text)
-            
+            yara_matches = self.malicious_rules.match(data=text)
             for match in yara_matches:
-                tags = match.meta.get('tags', '').split() if match.meta.get('tags') else []
-                description = match.meta.get('description', match.rule)
-                
+                tags = match.meta.get("tags", "").split() if match.meta.get("tags") else []
+                description = match.meta.get("description", match.rule)
+
                 for string_match in match.strings:
                     for instance in string_match.instances:
-                        matched_data = instance.matched_data.decode('utf-8', errors='ignore')
-                        matches.append(SignatureMatch(
-                            rule_id=match.rule,
-                            severity=severity,
-                            pattern=string_match.identifier,
-                            matched_text=matched_data,
-                            start_pos=instance.offset,
-                            end_pos=instance.offset + len(matched_data),
-                            rule_description=description,
-                            tags=tags,
-                            confidence=1.0
-                        ))
-                        
+                        matched_data = instance.matched_data.decode("utf-8", errors="ignore")
+                        matches.append(
+                            SignatureMatch(
+                                rule_id=match.rule,
+                                severity=Severity.MALICIOUS,
+                                pattern=string_match.identifier,
+                                matched_text=matched_data,
+                                start_pos=instance.offset,
+                                end_pos=instance.offset + len(matched_data),
+                                rule_description=description,
+                                tags=tags,
+                                confidence=1.0,
+                            )
+                        )
         except Exception as e:
             print(f"YARA matching error: {e}")
-        
+
         return matches
     
     def detect(self, text: str) -> LayerBResult:
@@ -89,32 +100,28 @@ class SignatureEngine:
                 processing_time_ms=(time.time() - start_time) * 1000,
                 matches=[],
                 verdict="allow",
-                total_score=0.0,
-                highest_severity=None,
                 confidence_score=0.99,
                 allowlisted=True,
                 allowlist_rules=allow_rules,
             )
 
-        all_matches = self._match_yara(text, Severity.HIGH)
+        all_matches = self._match_malicious_yara(text)
         
-        verdict, score, highest_sev, confidence = self._calculate_verdict(all_matches)
+        verdict, confidence = self._calculate_verdict(all_matches)
         
         return LayerBResult(
             input_hash=input_hash,
             processing_time_ms=(time.time() - start_time) * 1000,
             matches=all_matches,
             verdict=verdict,
-            total_score=score,
-            highest_severity=highest_sev,
             confidence_score=confidence,
             allowlisted=False,
             allowlist_rules=[],
         )
     
-    def _calculate_verdict(self, matches: List[SignatureMatch]) -> Tuple[str, float, Optional[Severity], float]:
+    def _calculate_verdict(self, matches: List[SignatureMatch]) -> Tuple[str, float]:
         if not matches:
-            return "allow", 0.0, None, 1.0
+            return "allow", 1.0
 
         # Extracted signatures are high-precision indicators.
         # Treat a single hit as suspicious, multiple hits as high confidence.
@@ -123,7 +130,4 @@ class SignatureEngine:
         else:
             verdict, confidence = "flag", 0.85
 
-        highest = Severity.HIGH
-        score = sum(m.confidence * 10.0 for m in matches)
-
-        return verdict, score, highest, confidence
+        return verdict, confidence
