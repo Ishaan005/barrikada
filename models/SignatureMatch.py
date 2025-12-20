@@ -3,10 +3,15 @@ from enum import Enum
 from typing import List
 
 class Severity(Enum):
-    """Signature severity levels"""
-    HIGH = "high"      # Block/auto-mitigate - unambiguous attacks
-    MEDIUM = "medium"  # Suspicious - escalate to ML/probe
-    LOW = "low"        # Informational - attach to metadata
+    """Signature outcome class.
+
+    Layer B is now driven by extracted YARA packs:
+    - MALICIOUS: extracted malicious indicators
+    - SAFE: extracted allowlisting signals (optimization / early termination)
+    """
+
+    MALICIOUS = "malicious"
+    SAFE = "safe"
 
 @dataclass
 class SignatureMatch:

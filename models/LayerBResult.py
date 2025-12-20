@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
-from .SignatureMatch import SignatureMatch, Severity
+from typing import List, Dict, Any
+from .SignatureMatch import SignatureMatch
 
 @dataclass
 class LayerBResult:
@@ -9,8 +9,6 @@ class LayerBResult:
     # Detection results
     matches: List[SignatureMatch]
     verdict: str  # "allow", "flag", "block"
-    total_score: float
-    highest_severity: Optional[Severity]
     confidence_score: float  # 0.0 to 1.0 - confidence in detection
     
     # Processing metadata
@@ -41,28 +39,19 @@ class LayerBResult:
                 for match in self.matches
             ],
             'verdict': self.verdict,
-            'total_score': self.total_score,
-            'highest_severity': self.highest_severity.value if self.highest_severity else None,
             'confidence_score': self.confidence_score,
             'allowlisted': self.allowlisted,
             'allowlist_rules': list(self.allowlist_rules),
         }
-    
+
     def get_risk_score(self) -> float:
-        """Calculate risk score contribution (0-100)"""
+        """Calculate risk score contribution (0-100)."""
+        if self.allowlisted:
+            return 0.0
         if not self.matches:
             return 0.0
-        
-        severity_weights = {
-            Severity.HIGH: 50.0,
-            Severity.MEDIUM: 25.0,
-            Severity.LOW: 10.0
-        }
-        
-        # Base risk on highest severity
-        base_risk = severity_weights.get(self.highest_severity, 0.0) if self.highest_severity else 0.0
-        
-        # Add incremental risk for multiple matches
+
+        # Any Layer B match is a malicious-indicator hit.
+        base_risk = 50.0
         match_count_bonus = min(20.0, len(self.matches) * 5.0)
-        
         return min(100.0, base_risk + match_count_bonus)
