@@ -16,7 +16,7 @@ from core.layer_b.signature_engine import SignatureEngine
 
 def test_layer_b():
     
-    df = pd.read_csv("datasets/barrikada_test.csv")
+    df = pd.read_csv("datasets/barrikada.csv")
     
     print(f"Testing Layer B on {len(df)} samples...")
     layer_b = SignatureEngine()
@@ -66,11 +66,47 @@ def test_layer_b():
     
     # Quick stats
     results_df = pd.DataFrame(results)
+
+    # Verdict breakdown
+    verdict_counts = (
+        results_df["layer_b_verdict"]
+        .fillna("unknown")
+        .astype(str)
+        .str.lower()
+        .value_counts()
+    )
+    total = int(verdict_counts.sum())
+    safe_count = int(verdict_counts.get("allow", 0))
+    flag_count = int(verdict_counts.get("flag", 0))
+    block_count = int(verdict_counts.get("block", 0))
+
+    print("\nVerdict breakdown:")
+    print(f"  allow:  {safe_count} ({safe_count/total:.1%})")
+    print(f"  flag:  {flag_count} ({flag_count/total:.1%})")
+    print(f"  block: {block_count} ({block_count/total:.1%})")
     
     accuracy = results_df['is_correct'].mean()
     tp = ((results_df['predicted_label'] == 1) & (results_df['true_label'] == 1)).sum()
     fp = ((results_df['predicted_label'] == 1) & (results_df['true_label'] == 0)).sum()
     fn = ((results_df['predicted_label'] == 0) & (results_df['true_label'] == 1)).sum()
+
+    # False negatives breakdown
+    fn_df = results_df[(results_df['predicted_label'] == 1) & (results_df['true_label'] == 0)]
+    if len(fn_df) > 0:
+        fn_verdict_counts = (
+            fn_df["layer_b_verdict"]
+            .value_counts()
+        )
+        fn_total = int(fn_verdict_counts.sum())
+
+        print("\nFalse negatives breakdown")
+        for verdict, count in fn_verdict_counts.items():
+            count_int = int(count)
+            print(f"  {verdict}: {count_int} ({count_int/fn_total:.1%})")
+
+        if "allowlisted" in fn_df.columns:
+            fn_allowlisted = int(fn_df["allowlisted"].fillna(False).astype(bool).sum())
+            print(f"  allowlisted_in_fn: {fn_allowlisted} ({fn_allowlisted/fn_total:.1%})")
 
     print(f"Accuracy: {accuracy:.3f}")
     print(f"Recall: {tp /(tp+fn)}")
