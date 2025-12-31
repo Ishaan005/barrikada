@@ -9,25 +9,6 @@ def safe_decode(raw_bytes: bytes, decode_errors: str = "replace", suspicious_thr
                 preferred_encodings: Optional[list[str]] = None, confidence_threshold: float = 0.7):
     """
     Safely decode raw bytes to Unicode string with robust encoding detection.
-    
-    Args:
-        raw_bytes (bytes): Input byte sequence.
-        decode_errors (str): Error handler ('replace', 'ignore', 'surrogateescape').
-        suspicious_threshold (int): Number of replacement chars before logging as suspicious.
-        preferred_encodings (list): List of encodings to try in order before detection.
-        confidence_threshold (float): Minimum confidence for chardet detection (0.0-1.0).
-    
-    Returns:
-        tuple: (decoded_text, meta_info)
-            decoded_text (str): Unicode text
-            meta_info (dict): {
-                "encoding_used": str,
-                "decode_replacements": int,
-                "suspicious": bool,
-                "detection_confidence": float,
-                "attempted_encodings": list,
-                "utf8_decode_errors": int,
-            }
     """
     if preferred_encodings is None:
         preferred_encodings = ["utf-8", "windows-1252", "iso-8859-1", "ascii"]

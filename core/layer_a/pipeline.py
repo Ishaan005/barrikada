@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 # Using all the modules I built to detect suspicious text
 from core.layer_a.safe_decode import safe_decode
 from core.layer_a.unicode import normalize_uniccode  
@@ -11,13 +19,13 @@ from models.LayerAResult import LayerAResult
 import base64
 import re
 import time
+import pandas as pd
 
 # Simple list to track what we find
 flags = []
 
 def add_flag(name):
     flags.append(name)
-    print(f"SUSPICIOUS: {name}")
 
 # Simple function to check for weird unicode directions
 def has_direction_override(text):
@@ -29,7 +37,7 @@ def has_direction_override(text):
 
 # Check if text might be base64 encoded
 def might_be_base64(text):
-    if len(text) < 32:  # Increased minimum length to reduce false positives
+    if len(text) < 32:
         return False
     
     clean = text.replace(' ', '').replace('\n', '').replace('\t', '')
@@ -95,11 +103,10 @@ def analyze_text(input_bytes):
     if isinstance(input_bytes, str):
         input_bytes = input_bytes.encode('utf-8')
     
-    print("Starting Layer A analysis...")
+    #print("Starting Layer A analysis...")
     
     # Step 1: Decode the bytes safely
     text, decode_info = safe_decode(input_bytes)
-    print(f"Decoded text: {repr(text)}")
     
     # Step 2: Fix unicode normalization  
     normalized = normalize_uniccode(text)
@@ -176,32 +183,3 @@ def _calculate_confidence(flags: list) -> float:
         return 0.70  # Medium confidence
     else:
         return 0.55  # Low confidence (e.g., possible_base64)
-
-# Test generated using AI (temporary)
-def main():
-    # Some test cases to try
-    tests = [
-        b"Hello world",  # normal text, should be clean
-        b"\xd1\x80assword",  # cyrillic p looks like latin p: dangerous confusable
-        b"VGhpcyBpcyBhIGhpZGRlbiBtZXNzYWdl",  # base64 encoded "This is a hidden message"
-        "Hello\u202eworld".encode('utf-8'),  # direction override attack  
-        b"Mixed \xd0\xa1yrillic text",  # mixed scripts: Cyrillic C in English
-        b"Just normal English text here",  # another clean example
-    ]
-    
-    print("Testing my prompt injection detector!\n")
-    
-    for i, test in enumerate(tests, 1):
-        print(f"--- Test {i} ---")
-        print(f"Input: {test}")
-        
-        result = analyze_text(test)
-        
-        print(f"Final text: {result.processed_text}")
-        print(f"Flags found: {result.flags}")
-        print(f"Is suspicious: {result.suspicious}")
-        print(f"Confidence: {result.confidence_score}")
-        print()
-
-# if __name__ == "__main__":
-#     main()
