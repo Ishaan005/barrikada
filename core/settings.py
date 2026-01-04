@@ -13,6 +13,9 @@ class Settings(BaseModel):
     # Scoring/thresholds
     layer_b_allow_confidence: float = 0.99
     layer_b_block_min_hits: int = 2
+    # To make hard-blocks rare/high-precision, require the matched rules to have
+    # very high extracted precision (from YARA meta). Otherwise, we only FLAG.
+    layer_b_block_min_rule_precision: float = 0.99
     layer_b_flag_confidence: float = 0.85
     layer_b_block_confidence: float = 0.95
 
@@ -30,6 +33,11 @@ class Settings(BaseModel):
     
 
     # ----- Layer C -----
+    # Routing thresholds for Layer C classifier:
+    # score < low => allow, low <= score < high => flag, score >= high => block
+    layer_c_low_threshold: float = 0.25
+    layer_c_high_threshold: float = 0.75
+
     @property
     def dataset_path(self) -> str:
         return str(self._project_root / "datasets" / "barrikada.csv")
