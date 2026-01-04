@@ -34,8 +34,8 @@ class PIPipeline:
         self.layer_c_classifier = Classifier(
             vectorizer_path=settings.vectorizer_path,
             model_path=settings.model_path,
-            low=0.25,
-            high=0.75,
+            low=settings.layer_c_low_threshold,
+            high=settings.layer_c_high_threshold,
         )
 
     def detect(self, input_text: str) -> PipelineResult:
@@ -100,25 +100,9 @@ class PIPipeline:
                 confidence_score=layer_b_result.confidence_score,
             )
 
-        # Clean allow from Layer B => allow immediately
-        if layer_b_result.verdict == "allow":
-            total_time = (time.time() - start_time) * 1000
-            return PipelineResult(
-                input_hash=input_hash,
-                total_processing_time_ms=total_time,
-                layer_a_result=layer_a_result.to_dict(),
-                layer_a_time_ms=layer_a_result.processing_time_ms,
-                layer_b_result=layer_b_result.to_dict(),
-                layer_b_time_ms=layer_b_result.processing_time_ms,
-                layer_c_result=None,
-                layer_c_time_ms=None,
-                final_verdict=FinalVerdict.ALLOW,
-                decision_layer=DecisionLayer.LAYER_B,
-                confidence_score=layer_b_result.confidence_score,
-            )
-
         # ----- Layer C -----
-        # Only for unsure cases (Layer B = flag)
+        # For security: anything not allowlisted SAFE is screened by Layer C.
+        # This prevents malicious prompts with no signature hits from being allowed.
         layer_c_result = self.layer_c_classifier.predict(analysis_text)
 
         total_time = (time.time() - start_time) * 1000

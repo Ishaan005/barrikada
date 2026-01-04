@@ -4,26 +4,28 @@ from typing import List, Tuple, Optional
 from pathlib import Path
 import yara
 
+from core.settings import Settings
 from models.SignatureMatch import SignatureMatch, Severity
 from models.LayerBResult import LayerBResult
 
 class SignatureEngine:
     
     def __init__(self):
-        self.signatures_dir = Path(__file__).parent / "signatures" / "extracted"
+        self.settings = Settings()
+        self.signatures_dir = Path(self.settings.layer_b_signatures_extracted_dir)
         self.malicious_rules: Optional[yara.Rules] = None
         self.allow_rules: Optional[yara.Rules] = None
         self._load_signatures()
     
     def _load_signatures(self):
-        extracted_high = self.signatures_dir / "malicious_block_high_signatures.yar"
-        extracted_allow = self.signatures_dir / "safe_allow_signatures.yar"
+        extracted_high = Path(self.settings.layer_b_malicious_rules_path)
+        extracted_allow = Path(self.settings.layer_b_allow_rules_path)
 
         # Ensure extracted HIGH signatures exist. Adding this here for open source collaborators.
         if not extracted_high.exists():
             raise FileNotFoundError(
-                "Extracted HIGH signatures not found. Run scripts/extract_signature_patterns.py "
-                "to generate core/layer_b/signatures/extracted/malicious_block_high_signatures.yar"
+                "Extracted MALICIOUS signatures not found. Run scripts/extract_signature_patterns.py "
+                f"to generate {extracted_high}"
             )
 
         self.malicious_rules = yara.compile(filepath=str(extracted_high))
@@ -65,8 +67,21 @@ class SignatureEngine:
         try:
             yara_matches = self.malicious_rules.match(data=text)
             for match in yara_matches:
-                tags = match.meta.get("tags", "").split() if match.meta.get("tags") else []
-                description = match.meta.get("description", match.rule)
+                # Extracted rules include useful meta fields (pattern, precision, support).
+                # YARA does not support float meta values, so our generator stores them as strings.
+                precision_raw = match.meta.get("precision", None)
+                try:
+                    precision = float(precision_raw) if precision_raw is not None else 1.0
+                except Exception:
+                    precision = 1.0
+
+                tags = list(getattr(match, "tags", []) or [])
+                rule_type = match.meta.get("type", None)
+                if rule_type:
+                    tags.append(str(rule_type))
+
+                # Prefer the original extracted pattern for interpretability.
+                description = match.meta.get("pattern", match.rule)
 
                 for string_match in match.strings:
                     for instance in string_match.instances:
@@ -81,7 +96,7 @@ class SignatureEngine:
                                 end_pos=instance.offset + len(matched_data),
                                 rule_description=description,
                                 tags=tags,
-                                confidence=1.0,
+                                confidence=precision,
                             )
                         )
         except Exception as e:
@@ -100,7 +115,7 @@ class SignatureEngine:
                 processing_time_ms=(time.time() - start_time) * 1000,
                 matches=[],
                 verdict="allow",
-                confidence_score=0.99,
+                confidence_score=self.settings.layer_b_allow_confidence,
                 allowlisted=True,
                 allowlist_rules=allow_rules,
             )
@@ -123,11 +138,30 @@ class SignatureEngine:
         if not matches:
             return "allow", 1.0
 
-        # Extracted signatures are high-precision indicators.
-        # Treat a single hit as suspicious, multiple hits as high confidence.
-        if len(matches) >= 2:
-            verdict, confidence = "block", 0.95
+        # IMPORTANT: `matches` contains per-instance matches. A single YARA rule can match
+        # multiple times in one prompt, which can incorrectly inflate match counts.
+        # Use distinct matched RULE IDs for verdicting.
+        # Collapse per-instance matches down to distinct rules and their (max) confidence.
+        # Our extractor stores rule precision in YARA meta and we copy it into
+        # SignatureMatch.confidence.
+        rule_to_conf: dict[str, float] = {}
+        for m in matches:
+            prev = rule_to_conf.get(m.rule_id)
+            rule_to_conf[m.rule_id] = m.confidence if prev is None else max(prev, m.confidence)
+
+        distinct_rule_hits = len(rule_to_conf)
+        min_rule_precision = min(rule_to_conf.values()) if rule_to_conf else 0.0
+
+        # Extremely conservative hard-block policy:
+        # - require multiple distinct rules
+        # - require those rules to be very high precision
+        # Otherwise: FLAG for review / ML escalation.
+        if (
+            distinct_rule_hits >= self.settings.layer_b_block_min_hits
+            and min_rule_precision >= self.settings.layer_b_block_min_rule_precision
+        ):
+            verdict, confidence = "block", self.settings.layer_b_block_confidence
         else:
-            verdict, confidence = "flag", 0.85
+            verdict, confidence = "flag", self.settings.layer_b_flag_confidence
 
         return verdict, confidence

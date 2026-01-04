@@ -285,7 +285,7 @@ def _yara_meta_value(v: Any) -> str:
     """Render a YARA meta value.
 
     - integers are emitted as integers
-    - floating point values are emitted as strings (YARA does not support floats)
+    - floating point values are emitted as strings (YARA does not support floats?!?!)
     - everything else is emitted as a double-quoted string
     """
     if isinstance(v, bool):
@@ -312,7 +312,7 @@ def _render_rule(
     meta: List[Tuple[str, Any]],
 ) -> str:
     tag_str = f" : {' '.join(tags)}" if tags else ""
-    
+
     lines: List[str] = []
     lines.append(f"rule {rule_name}{tag_str} {{")
     lines.append("    meta:")
