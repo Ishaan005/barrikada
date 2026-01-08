@@ -3,20 +3,24 @@ import re
 
 def normalise_punctuation_and_whitespace(text:str):
     """Use ftfy to fix punctuation and whitespace issues."""
-    #Step 1
-    fixed = ftfy.fix_text(text)
+    
+    # Step 1: Canonicalize newlines
+    fixed = text.replace("\r\n", "\n").replace("\r", "\n")
+    
+    # Step 2: ftfy fixes mojibake and other Unicode issues
+    fixed = ftfy.fix_text(fixed)
 
-    #Step 2
+    # Step 3: Normalize quote characters to ASCII equivalents
     quotes_map = {
-        "“": '"', "”": '"',
-        "‘": "'", "’": "'",
+        """: '"', """: '"',
+        "'": "'", "'": "'",
         "«": '"', "»": '"',
     }
 
     for k, v in quotes_map.items():
         fixed = fixed.replace(k, v)
 
-    #Step 3
+    # Step 4: Normalize dash/minus variants
     dashes_map = {
         "–": "-",   # en-dash
         "—": "-",   # em-dash
@@ -26,15 +30,11 @@ def normalise_punctuation_and_whitespace(text:str):
     for k, v in dashes_map.items():
         fixed = fixed.replace(k, v)
 
-    #Step 4
-    fixed = re.sub(r"\s+", " ", fixed)       # collapse spaces/tabs/newlines into one space
+    # Step 5: Collapse whitespace (spaces/tabs/newlines) into single space
+    fixed = re.sub(r"\s+", " ", fixed)
     fixed = fixed.strip()
-
-    #step 5
-    canonical_newlines = text.replace("\r\n", "\n").replace("\r", "\n")
 
     return {
         "original": text,
         "normalised": fixed,
-        "normalised_newlines": canonical_newlines,
     }
