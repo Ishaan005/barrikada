@@ -98,7 +98,7 @@ def analyze_text(input_bytes):
     global flags
     flags = []  # reset
     start_time = time.time()
-    
+  
     # Handle both bytes and string input
     if isinstance(input_bytes, str):
         input_bytes = input_bytes.encode('utf-8')
