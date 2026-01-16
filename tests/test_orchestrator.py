@@ -30,13 +30,19 @@ def test_pipeline():
         result = pipeline.detect(test_case['text'])
         
         print(f"Final Verdict: {result.final_verdict}")
+        print(f"Decision Layer: {result.decision_layer}")
         print(f"Confidence: {result.confidence_score:.2f}")
-        print(f"Risk Score: {result.risk_score:.1f}/100")
-        print(f"Detected Threats: {result.detected_threats}")
-        print(f"Recommendation: {result.recommended_action}")
         print(f"Total Time: {result.total_processing_time_ms:.2f}ms")
         print(f"  Layer A: {result.layer_a_time_ms:.2f}ms")
-        print(f"  Layer B: {result.layer_b_time_ms:.2f}ms")
+        if result.layer_b_time_ms is None:
+            print("  Layer B: skipped")
+        else:
+            print(f"  Layer B: {result.layer_b_time_ms:.2f}ms")
+        if result.layer_c_time_ms is None:
+            print("  Layer C: skipped")
+        else:
+            print(f"  Layer C: {result.layer_c_time_ms:.2f}ms")
+        print()
 
         # Determine if prediction was correct
         is_correct = False
@@ -53,14 +59,17 @@ def test_pipeline():
             'true_label': test_case['label'],
             'predicted_verdict': result.final_verdict,
             'confidence_score': result.confidence_score,
-            'risk_score': result.risk_score,
             'is_correct': is_correct,
-            'detected_threats': '; '.join(result.detected_threats) if result.detected_threats else '',
+            'decision_layer': result.decision_layer,
             'total_time_ms': result.total_processing_time_ms,
             'layer_a_time_ms': result.layer_a_time_ms,
             'layer_b_time_ms': result.layer_b_time_ms,
-            'layer_a_flags': '; '.join(result.layer_a_result.get('flags', [])),
-            'layer_b_matches': len(result.layer_b_result.get('matches', [])),
+            'layer_c_time_ms': result.layer_c_time_ms,
+            'layer_a_flags': '; '.join(result.layer_a_result.get('flags', []) if result.layer_a_result else []),
+            'layer_b_matches': len(result.layer_b_result.get('matches', []) if result.layer_b_result else []),
+            'layer_c_verdict': result.layer_c_result.get('verdict', '') if result.layer_c_result else '',
+            'layer_c_probability': result.layer_c_result.get('probability_score', 0.0) if result.layer_c_result else 0.0,
+            'layer_c_confidence': result.layer_c_result.get('confidence_score', 0.0) if result.layer_c_result else 0.0,
         })
 
     accuracy = (correct / len(test_cases)) * 100
@@ -88,9 +97,12 @@ def test_pipeline():
         'avg_total_time_ms': results_df['total_time_ms'].mean(),
         'avg_layer_a_time_ms': results_df['layer_a_time_ms'].mean(),
         'avg_layer_b_time_ms': results_df['layer_b_time_ms'].mean(),
+        'avg_layer_c_time_ms': results_df['layer_c_time_ms'].mean(),
         'avg_confidence': results_df['confidence_score'].mean(),
-        'avg_risk_score': results_df['risk_score'].mean(),
+        'avg_layer_c_probability': results_df['layer_c_probability'].mean(),
         'verdict_distribution': results_df['predicted_verdict'].value_counts().to_dict(),
+        'layer_c_verdict_distribution': results_df['layer_c_verdict'].value_counts().to_dict(),
+        'decision_layer_distribution': results_df['decision_layer'].value_counts().to_dict(),
         'test_timestamp': datetime.datetime.now().isoformat()
     }
     
@@ -104,9 +116,12 @@ def test_pipeline():
     # Print quick summary
     print(f"\nSUMMARY:")
     print(f"   Average Total Time: {summary_stats['avg_total_time_ms']:.2f}ms")
+    print(f"   Average Layer C Time: {summary_stats['avg_layer_c_time_ms']:.2f}ms")
     print(f"   Average Confidence: {summary_stats['avg_confidence']:.2f}")
-    print(f"   Average Risk Score: {summary_stats['avg_risk_score']:.1f}")
-    print(f"   Verdict Distribution: {summary_stats['verdict_distribution']}")
+    print(f"   Average Layer C Probability: {summary_stats['avg_layer_c_probability']:.2f}")
+    print(f"   Final Verdict Distribution: {summary_stats['verdict_distribution']}")
+    print(f"   Layer C Verdict Distribution: {summary_stats['layer_c_verdict_distribution']}")
+    print(f"   Decision Layer Distribution: {summary_stats['decision_layer_distribution']}")
         
         # Show layer details
         # if result.layer_a_result.get('flags'):

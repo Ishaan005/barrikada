@@ -98,23 +98,23 @@ def detect_homoglyphs(text: str, normalize: bool = True):
     }
     return normalized_text, metadata
 
-def detect_suspicious_unicode_categories(text: str):
-    """
-    Detect characters in suspicious Unicode categories that could hide attacks.
-    """
-    suspicious_chars = []
+# def detect_suspicious_unicode_categories(text: str):
+#     """
+#     Detect characters in suspicious Unicode categories that could hide attacks.
+#     """
+#     suspicious_chars = []
     
-    for i, char in enumerate(text):
-        category = unicodedata.category(char)
-        if category in SUSPICIOUS_CATEGORIES:
-            suspicious_chars.append({
-                'char': char,
-                'position': i,
-                'category': category,
-                'unicode_name': unicodedata.name(char, 'UNKNOWN')
-            })
+#     for i, char in enumerate(text):
+#         category = unicodedata.category(char)
+#         if category in SUSPICIOUS_CATEGORIES:
+#             suspicious_chars.append({
+#                 'char': char,
+#                 'position': i,
+#                 'category': category,
+#                 'unicode_name': unicodedata.name(char, 'UNKNOWN')
+#             })
     
-    return suspicious_chars
+#     return suspicious_chars
 
 def detect_control_characters(text: str, strip_controls: bool = True):
     """
@@ -147,36 +147,36 @@ def detect_control_characters(text: str, strip_controls: bool = True):
         'was_cleaned': cleaned_text != text
     }
 
-#TODO: Evaluation required
-def analyze_text_structure(text: str):
-    """
-    Analyze text structure for potential injection patterns.
-    """
-    analysis = {
-        'length': len(text),
-        'line_count': text.count('\n') + 1,
-        'word_count': len(text.split()),
-        'char_counts': {},
-        #'suspicious_patterns': []
-    }
+# #TODO: Evaluation required
+# def analyze_text_structure(text: str):
+#     """
+#     Analyze text structure for potential injection patterns.
+#     """
+#     analysis = {
+#         'length': len(text),
+#         'line_count': text.count('\n') + 1,
+#         'word_count': len(text.split()),
+#         'char_counts': {},
+#         #'suspicious_patterns': []
+#     }
     
-    # Character frequency analysis
-    for char in text:
-        category = unicodedata.category(char)
-        analysis['char_counts'][category] = analysis['char_counts'].get(category, 0) + 1
+#     # Character frequency analysis
+#     for char in text:
+#         category = unicodedata.category(char)
+#         analysis['char_counts'][category] = analysis['char_counts'].get(category, 0) + 1
         
-    #TODO: Evaluate whether to include this. Prompts should be allowed to be long. Overly long propts would be blocked anyway?
+#     #TODO: Evaluate whether to include this. Prompts should be allowed to be long. Overly long propts would be blocked anyway?
 
-    # # Look for suspicious patterns
-    # if text.count('\n') > 50:
-    #     analysis['suspicious_patterns'].append('excessive_newlines')
+#     # # Look for suspicious patterns
+#     # if text.count('\n') > 50:
+#     #     analysis['suspicious_patterns'].append('excessive_newlines')
     
-    # if len(text) > 10000:
-    #     analysis['suspicious_patterns'].append('excessive_length')
+#     # if len(text) > 10000:
+#     #     analysis['suspicious_patterns'].append('excessive_length')
     
-    # Look for repeated suspicious chars
-    for char in ['\u200B', '\u200C', '\u200D', '\uFEFF']:
-        if text.count(char) > 5:
-            analysis['suspicious_patterns'].append(f'repeated_{unicodedata.name(char, "unknown").lower()}')
+#     # Look for repeated suspicious chars
+#     for char in ['\u200B', '\u200C', '\u200D', '\uFEFF']:
+#         if text.count(char) > 5:
+#             analysis['suspicious_patterns'].append(f'repeated_{unicodedata.name(char, "unknown").lower()}')
     
-    return analysis
+#     return analysis

@@ -30,8 +30,13 @@ def normalise_punctuation_and_whitespace(text:str):
     for k, v in dashes_map.items():
         fixed = fixed.replace(k, v)
 
-    # Step 5: Collapse whitespace (spaces/tabs/newlines) into single space
-    fixed = re.sub(r"\s+", " ", fixed)
+    # Step 5: Normalize whitespace while preserving line structure
+    # First, collapse multiple newlines to single newline
+    fixed = re.sub(r"\n+", "\n", fixed)
+    # Then collapse horizontal whitespace (spaces/tabs) to single space
+    fixed = re.sub(r"[^\S\n]+", " ", fixed)
+    # Clean up spaces around newlines
+    fixed = re.sub(r" *\n *", "\n", fixed)
     fixed = fixed.strip()
 
     return {
