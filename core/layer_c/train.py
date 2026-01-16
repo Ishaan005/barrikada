@@ -16,7 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from core.settings import Settings
 from core.layer_c.training_utils import load_data, save, train_eval, write_json
 
-def main() -> int:
+def main():
     settings = Settings()
 
     parser = argparse.ArgumentParser(description="Train Layer-C Tier-2 classifier")

@@ -16,73 +16,28 @@ from core.layer_a.detect_encodings import detect_and_decode_embedded
 
 from models.LayerAResult import LayerAResult
 
-import base64
 import re
 import time
-import pandas as pd
 
-# Simple list to track what we find
-flags = []
+# Check for bidirectional text override attacks
+# Complete list per Unicode Bidirectional Algorithm
+BIDI_OVERRIDE_CHARS = {
+    '\u202A',  # LRE - Left-to-Right Embedding
+    '\u202B',  # RLE - Right-to-Left Embedding  
+    '\u202C',  # PDF - Pop Directional Formatting
+    '\u202D',  # LRO - Left-to-Right Override
+    '\u202E',  # RLO - Right-to-Left Override
+    '\u2066',  # LRI - Left-to-Right Isolate
+    '\u2067',  # RLI - Right-to-Left Isolate
+    '\u2068',  # FSI - First Strong Isolate
+    '\u2069',  # PDI - Pop Directional Isolate
+    '\u061C',  # ALM - Arabic Letter Mark
+}
 
-def add_flag(name):
-    flags.append(name)
-
-# Simple function to check for weird unicode directions
 def has_direction_override(text):
-    bad_chars = ['\u202D', '\u202E', '\u2066', '\u2067', '\u2068']
-    for char in bad_chars:
-        if char in text:
-            return True
-    return False
+    """Check if text contains bidirectional override characters."""
+    return any(char in text for char in BIDI_OVERRIDE_CHARS)
 
-# Check if text might be base64 encoded
-def might_be_base64(text):
-    if len(text) < 32:
-        return False
-    
-    clean = text.replace(' ', '').replace('\n', '').replace('\t', '')
-    
-    # Must look like base64 (only valid chars)
-    valid_chars = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=')
-    if not all(c in valid_chars for c in clean):
-        return False
-    
-    # Must be proper length (multiple of 4)
-    if len(clean) % 4 != 0:
-        return False
-    
-    # Skip if it looks like a common benign pattern
-    benign_patterns = [
-        # JWT header patterns (typically short)
-        r'^eyJ[A-Za-z0-9+/]+={0,2}$',  # JWT header
-        # Very short base64 strings
-        r'^[A-Za-z0-9+/]{8,24}={0,2}$',  # Short tokens
-    ]
-    
-    for pattern in benign_patterns:
-        if re.match(pattern, clean):
-            return False
-        
-    try:
-        decoded = base64.b64decode(clean)
-        # Decoded content should be reasonable length and mostly printable
-        if len(decoded) < 8:  # Increased minimum decoded length
-            return False
-        try:
-            decoded_str = decoded.decode('utf-8', errors='strict')
-            
-            # Additional check: look for suspicious keywords in decoded content
-            suspicious_keywords = ['ignore', 'previous', 'instruction', 'system', 'admin', 'password', 'secret']
-            decoded_lower = decoded_str.lower()
-            has_suspicious = any(keyword in decoded_lower for keyword in suspicious_keywords)
-            
-            # Only flag if it has suspicious content or is unusually long
-            return has_suspicious or len(decoded) > 100
-            
-        except:
-            return False  # Invalid UTF-8 suggests not meaningful base64
-    except:
-        return False
 
 # Main function to process and analyze text
 def analyze_text(input_bytes):
@@ -95,18 +50,24 @@ def analyze_text(input_bytes):
     Returns:
         LayerAResult: Standardized result object
     """
-    global flags
-    flags = []  # reset
+    # Thread-safe local flags list
+    flags = []
+    
+    def add_flag(name):
+        flags.append(name)
+    
     start_time = time.time()
   
     # Handle both bytes and string input
     if isinstance(input_bytes, str):
         input_bytes = input_bytes.encode('utf-8')
     
-    #print("Starting Layer A analysis...")
-    
     # Step 1: Decode the bytes safely
     text, decode_info = safe_decode(input_bytes)
+    
+    # Flag suspicious encoding issues (replacement chars, low confidence)
+    if decode_info.get('suspicious'):
+        add_flag('suspicious_encoding')
     
     # Step 2: Fix unicode normalization  
     normalized = normalize_uniccode(text)
@@ -115,31 +76,26 @@ def analyze_text(input_bytes):
     punct_result = normalise_punctuation_and_whitespace(normalized)
     cleaned_punct = punct_result['normalised']
     
-    # Step 4: Remove suspicious characters
-    cleaned, strip_info = strip_suspicious_characters(cleaned_punct)
-    
-    # Step 5: Look for embedded encodings
-    embedded_result = detect_and_decode_embedded(cleaned)
-    if embedded_result.get('found_encodings'):
-        add_flag('embedded_encodings')
-    
-    # Step 6: Check for direction override attacks
-    if has_direction_override(text):  # Check original text before cleaning
-        add_flag('direction_override')
-    
-    # Step 7: Check if it looks like base64
-    if might_be_base64(cleaned):
-        add_flag('possible_base64')
-    
-    # Step 8: Check for confusable characters
-    confusable_info = detect_confusables(cleaned, threshold=0.15) 
-
-    # Only flag if it's actually dangerous or mixed script, not just having confusables
+    # Step 4: Check for confusable characters before stripping
+    confusable_info = detect_confusables(cleaned_punct, threshold=0.15) 
     if confusable_info.get('is_dangerous') or confusable_info.get('is_mixed_script'):
         add_flag('confusable_chars')
     
-    # Final canonical version
-    final_text = normalize_uniccode(cleaned)
+    # Step 5: Remove suspicious characters (zero-width, bidi, homoglyphs, control chars)
+    cleaned = strip_suspicious_characters(cleaned_punct)
+    
+    # Step 6: Look for embedded encodings (base64, hex, url, html)
+    embedded_result = detect_and_decode_embedded(cleaned)
+    if embedded_result.get('suspicious') or len(embedded_result.get('findings', [])) > 0:
+        add_flag('embedded_encodings')
+    
+    # Step 7: Check for direction override attacks on ORIGINAL text
+    # (before cleaning removed them)
+    if has_direction_override(text):
+        add_flag('direction_override')
+    
+    # Final canonical version (cleaned text is already normalized)
+    final_text = cleaned
     
     # Calculate processing time
     processing_time_ms = (time.time() - start_time) * 1000
@@ -165,14 +121,13 @@ def _calculate_confidence(flags: list) -> float:
     Calculate confidence score based on detected flags
     
     High confidence detections: direction_override, embedded_encodings
-    Medium confidence: confusable_chars
-    Low confidence: possible_base64
+    Medium confidence: confusable_chars, suspicious_encoding
     """
     if not flags:
         return 1.0  # High confidence in clean text
     
     high_confidence_flags = ['direction_override', 'embedded_encodings']
-    medium_confidence_flags = ['confusable_chars']
+    medium_confidence_flags = ['confusable_chars', 'suspicious_encoding']
     
     has_high = any(flag in flags for flag in high_confidence_flags)
     has_medium = any(flag in flags for flag in medium_confidence_flags)
@@ -182,4 +137,4 @@ def _calculate_confidence(flags: list) -> float:
     elif has_medium:
         return 0.70  # Medium confidence
     else:
-        return 0.55  # Low confidence (e.g., possible_base64)
+        return 0.60  # Other flags

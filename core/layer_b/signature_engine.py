@@ -108,6 +108,23 @@ class SignatureEngine:
         start_time = time.time()
         input_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
 
+        # Always check for malicious patterns first (prevents evasion by padding with safe text)
+        all_matches = self._match_malicious_yara(text)
+        
+        # If malicious patterns found, verdict based on those (ignore allowlist)
+        if all_matches:
+            verdict, confidence = self._calculate_verdict(all_matches)
+            return LayerBResult(
+                input_hash=input_hash,
+                processing_time_ms=(time.time() - start_time) * 1000,
+                matches=all_matches,
+                verdict=verdict,
+                confidence_score=confidence,
+                allowlisted=False,
+                allowlist_rules=[],
+            )
+        
+        # No malicious patterns - check if allowlisted for early exit
         allowlisted, allow_rules = self._is_allowlisted(text)
         if allowlisted:
             return LayerBResult(
@@ -119,9 +136,8 @@ class SignatureEngine:
                 allowlisted=True,
                 allowlist_rules=allow_rules,
             )
-
-        all_matches = self._match_malicious_yara(text)
         
+        # No malicious matches, not allowlisted - flag for ML review
         verdict, confidence = self._calculate_verdict(all_matches)
         
         return LayerBResult(
@@ -136,7 +152,8 @@ class SignatureEngine:
     
     def _calculate_verdict(self, matches: List[SignatureMatch]) -> Tuple[str, float]:
         if not matches:
-            return "allow", 1.0
+            # No signature matches and not allowlisted - flag for ML classifier review
+            return "flag", self.settings.layer_b_flag_confidence
 
         # IMPORTANT: `matches` contains per-instance matches. A single YARA rule can match
         # multiple times in one prompt, which can incorrectly inflate match counts.

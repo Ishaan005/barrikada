@@ -1,6 +1,5 @@
 """Extract YARA signatures from the Barrikada dataset.
 
-This script is intentionally simple for this project:
 - Input is always `datasets/barrikada.csv`.
 - Output is always YARA rules under `core/layer_b/signatures/extracted/`.
 
@@ -45,12 +44,12 @@ SAFE_ALLOW_PRECISION_THRESHOLD = 0.995  # safe/(safe+malicious)
 SAFE_ALLOW_MAL_DF_CAP = 1  # appears in <= this many malicious samples
 
 # MALICIOUS signature selection
-MAL_MIN_SUPPORT = 20
-MAL_PRECISION_THRESHOLD = 0.95 #have at least 95% (malicious / total hits)
-MAL_SAFE_DF_CAP = 2 #but seen in at most 2 safe samples
+MAL_MIN_SUPPORT = 20          # lowered from 20 - catch rarer attack patterns
+MAL_PRECISION_THRESHOLD = 0.95    #have at least 90% (malicious / total hits)
+MAL_SAFE_DF_CAP = 2              #but seen in at most 2 safe samples
 
 
-def normalize_text(text: str) -> str:
+def normalize_text(text):
     if text is None:
         return ""
     text = str(text).lower()  # lowercase
@@ -58,13 +57,8 @@ def normalize_text(text: str) -> str:
     text = _WS_RE.sub(" ", text).strip()  # collapse whitespace
     return text
 
-def _make_vectorizers() -> Tuple[CountVectorizer, CountVectorizer]:
-    """
-    Helper that creates two CountVectorizers: one for word n-grams and one for character n-grams.
-    
-    :return: Description
-    :rtype: Tuple[CountVectorizer, CountVectorizer]
-    """
+def _make_vectorizers():
+
     # Token n-grams (1-4)
     word_vec = CountVectorizer(
         analyzer="word",
@@ -110,10 +104,7 @@ def _is_stopwordy_ngram(pattern: str) -> bool:
     return all(t in _STOPWORDS for t in tokens)
 
 
-def build_safe_signatures(
-    texts_norm: List[str],
-    labels: np.ndarray,
-) -> List[dict]:
+def build_safe_signatures(texts_norm,labels):
     """Build high precision SAFE allow signatures.
 
     These rules allow early termination (most prompts are SAFE, so we shouldnt waste compute passing them to ML layer etc..)
@@ -144,7 +135,7 @@ def build_safe_signatures(
     mal_df = _doc_freq(Xw[mal_mask])  # type: ignore
 
     # Select candidates
-    candidates: List[PatternStats] = []
+    candidates = []
     for pattern, s_df_i, m_df_i in zip(vocab, safe_df, mal_df):
         # pattern = str(pat)
         # s_df_i = int(s_df)
@@ -169,7 +160,7 @@ def build_safe_signatures(
     candidates.sort(key=lambda x: (x.mal_precision, x.mal_df, -len(x.pattern)), reverse=True)
     candidates = candidates[:SAFE_TOP_K]
 
-    out: List[dict] = []
+    out = []
     for c in candidates:
         out.append(
             {
@@ -183,10 +174,7 @@ def build_safe_signatures(
     return out
 
 
-def build_malicious_signatures(
-    texts_norm: List[str],
-    labels: np.ndarray,
-) -> List[dict]:
+def build_malicious_signatures(texts_norm,labels):
     word_vec, char_vec = _make_vectorizers()
 
     # Fit on all docs so we can compare safe vs malicious support
@@ -206,7 +194,7 @@ def build_malicious_signatures(
     c_safe_df = _doc_freq(Xc[safe_mask])  # type: ignore
     c_mal_df = _doc_freq(Xc[mal_mask])  # type: ignore
 
-    stats: List[PatternStats] = [] # or stats: List[PatternStats] = [] for automcomplete. I didnt cus I want readable code
+    stats = [] # or stats: List[PatternStats] = [] for automcomplete. I didnt cus I want readable code
 
     for pat, s_df, m_df in zip(w_vocab, w_safe_df, w_mal_df):
         stats.append(PatternStats(pattern=str(pat), safe_df=int(s_df), mal_df=int(m_df)))
@@ -243,7 +231,7 @@ def build_malicious_signatures(
     return out
 
 
-def load_dataset(csv_path: Path) -> Tuple[pd.Series, np.ndarray]:
+def load_dataset(csv_path):
     df = pd.read_csv(csv_path)
 
     texts = df["text"].fillna("")
@@ -251,7 +239,7 @@ def load_dataset(csv_path: Path) -> Tuple[pd.Series, np.ndarray]:
     return texts, labels
 
 
-def _yara_escape_str_literal(s: str) -> str:
+def _yara_escape_str_literal(s):
     # YARA double-quoted string
     return s.replace('\\', r'\\').replace('"', r'\\"')
 
@@ -259,8 +247,6 @@ def _yara_escape_str_literal(s: str) -> str:
 def _yara_word_ngram_regex(pattern: str) -> str:
     # Designed for normalized text (lower, punctuation removed, whitespace collapsed).
     tokens = pattern.split()
-    # IMPORTANT: this string is written verbatim into a YARA `/.../` regex.
-    # Emit `\s` (not `\\s`) so YARA interprets it as whitespace.
     body = "\\s+".join(re.escape(t) for t in tokens)
     return f"(^|\\s){body}(\\s|$)"
 
@@ -313,7 +299,7 @@ def _render_rule(
 ) -> str:
     tag_str = f" : {' '.join(tags)}" if tags else ""
 
-    lines: List[str] = []
+    lines = []
     lines.append(f"rule {rule_name}{tag_str} {{")
     lines.append("    meta:")
     lines.append(f"        pattern = \"{_yara_escape_str_literal(pattern)}\"")
@@ -353,7 +339,7 @@ def write_yara_rules(
         ident, decl = _pattern_to_yara_string(pattern)
 
         tags = ["extracted"]
-        meta: List[Tuple[str, Any]] = []
+        meta=  []
         for k in meta_keys:
             if k in sig:
                 meta.append((k, sig[k]))

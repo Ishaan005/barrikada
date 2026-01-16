@@ -1,7 +1,9 @@
 import regex
+import logging
 from collections import Counter
 from confusable_homoglyphs import confusables
-from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 # Reference the paper 
 def script_distribution(text: str):
@@ -24,7 +26,7 @@ def script_distribution(text: str):
             scripts["Other"] += 1
     return dict(scripts)
 
-def detect_confusables(text: str, expected_script = "Latin", threshold = 0.1) -> Dict[str, Any]:
+def detect_confusables(text: str, expected_script = "Latin", threshold = 0.1):
     scripts = script_distribution(text)
     total = sum(scripts.values())
     expected_count = scripts.get(expected_script, 0)
@@ -48,8 +50,8 @@ def detect_confusables(text: str, expected_script = "Latin", threshold = 0.1) ->
         # Get detailed confusable information (check if text has confusables)
         confusable_details = confusables.is_confusable(text)
     except Exception as e:
-        # Handle any errors in confusable detection
-        pass
+        logger.warning(f"Confusable detection error: {e}")
+        # Continue with defaults (is_dangerous=False, is_mixed=False)
 
     if is_dangerous or is_mixed or confusable_details:
         amogus_sus = True

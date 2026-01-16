@@ -70,13 +70,11 @@ def load_data(csv_path):
 
     return X, y, used_df
 
-#TODO: Delete
 def make_vectorizer():
     word = TfidfVectorizer(ngram_range=(1, 2), analyzer="word", min_df=2)
     char = TfidfVectorizer(ngram_range=(3, 5), analyzer="char_wb", min_df=2)
     return FeatureUnion([("word", word), ("char", char)])  # type: ignore
 
-#TODO: Delete
 def make_model():
     return LogisticRegression(
         solver="saga",

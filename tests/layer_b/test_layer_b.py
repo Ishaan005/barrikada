@@ -16,7 +16,7 @@ from core.layer_b.signature_engine import SignatureEngine
 
 def test_layer_b():
     
-    df = pd.read_csv("datasets/barrikada.csv")
+    df = pd.read_csv("datasets/barrikada_test.csv")
     
     print(f"Testing Layer B on {len(df)} samples...")
     layer_b = SignatureEngine()
@@ -75,44 +75,50 @@ def test_layer_b():
         .str.lower()
         .value_counts()
     )
-    total = int(verdict_counts.sum())
-    safe_count = int(verdict_counts.get("allow", 0))
-    flag_count = int(verdict_counts.get("flag", 0))
-    block_count = int(verdict_counts.get("block", 0))
+    total = verdict_counts.sum()
 
-    print("\nVerdict breakdown:")
-    print(f"  allow:  {safe_count} ({safe_count/total:.1%})")
-    print(f"  flag:  {flag_count} ({flag_count/total:.1%})")
-    print(f"  block: {block_count} ({block_count/total:.1%})")
     
-    accuracy = results_df['is_correct'].mean()
+    # Confusion Matrix
+    print("\n" + "="*60)
+    print("CONFUSION MATRIX")
+    print("="*60)
+    
+    # Calculate confusion matrix values
+    safe_allow = ((results_df['true_label'] == 0) & (results_df['layer_b_verdict'] == 'allow')).sum()
+    safe_flag = ((results_df['true_label'] == 0) & (results_df['layer_b_verdict'] == 'flag')).sum()
+    safe_block = ((results_df['true_label'] == 0) & (results_df['layer_b_verdict'] == 'block')).sum()
+    
+    malicious_allow = ((results_df['true_label'] == 1) & (results_df['layer_b_verdict'] == 'allow')).sum()
+    malicious_flag = ((results_df['true_label'] == 1) & (results_df['layer_b_verdict'] == 'flag')).sum()
+    malicious_block = ((results_df['true_label'] == 1) & (results_df['layer_b_verdict'] == 'block')).sum()
+    
+    # Calculate totals
+    safe_total = safe_allow + safe_flag + safe_block
+    malicious_total = malicious_allow + malicious_flag + malicious_block
+    
+    # Print table header
+    print(f"{'Ground Truth':<15} | {'Allow':>10} | {'Flag':>10} | {'Block':>10} | {'Total':>10}")
+    print("-" * 60)
+    
+    # Print SAFE row
+    print(f"{'SAFE':<15} | {safe_allow:>10} | {safe_flag:>10} | {safe_block:>10} | {safe_total:>10}")
+    
+    # Print MALICIOUS row
+    print(f"{'MALICIOUS':<15} | {malicious_allow:>10} | {malicious_flag:>10} | {malicious_block:>10} | {malicious_total:>10}")
+    
+    # Print total row
+    allow_total = safe_allow + malicious_allow
+    flag_total = safe_flag + malicious_flag
+    block_total = safe_block + malicious_block
+    print("-" * 60)
+    print(f"{'Total':<15} | {allow_total:>10} | {flag_total:>10} | {block_total:>10} | {total:>10}")
+    print("="*60)
+    
     tp = ((results_df['predicted_label'] == 1) & (results_df['true_label'] == 1)).sum()
-    fp = ((results_df['predicted_label'] == 1) & (results_df['true_label'] == 0)).sum()
     fn = ((results_df['predicted_label'] == 0) & (results_df['true_label'] == 1)).sum()
 
-    # False negatives breakdown
-    fn_df = results_df[(results_df['predicted_label'] == 1) & (results_df['true_label'] == 0)]
-    if len(fn_df) > 0:
-        fn_verdict_counts = (
-            fn_df["layer_b_verdict"]
-            .value_counts()
-        )
-        fn_total = int(fn_verdict_counts.sum())
-
-        print("\nFalse negatives breakdown")
-        for verdict, count in fn_verdict_counts.items():
-            count_int = int(count)
-            print(f"  {verdict}: {count_int} ({count_int/fn_total:.1%})")
-
-        if "allowlisted" in fn_df.columns:
-            fn_allowlisted = int(fn_df["allowlisted"].fillna(False).astype(bool).sum())
-            print(f"  allowlisted_in_fn: {fn_allowlisted} ({fn_allowlisted/fn_total:.1%})")
-
-    print(f"Accuracy: {accuracy:.3f}")
     print(f"Recall: {tp /(tp+fn)}")
     print(f"Total detections: {results_df['predicted_label'].sum()}")
-    print(f"True positives: {tp}")
-    print(f"False positives: {fp}")
     
     return output_path
 

@@ -43,6 +43,7 @@ def safe_decode(raw_bytes: bytes, decode_errors: str = "replace", suspicious_thr
     
     # Step 1: Try preferred encodings in order
     for encoding in preferred_encodings:
+        try:
             attempted_encodings.append(encoding)
             text = raw_bytes.decode(encoding, errors=decode_errors)
             replacements = text.count("�")  # replacement character
@@ -58,7 +59,9 @@ def safe_decode(raw_bytes: bytes, decode_errors: str = "replace", suspicious_thr
             # For UTF-8, if no replacements and no decode errors, it's perfect
             if encoding.lower() == "utf-8" and replacements == 0 and utf8_decode_errors == 0:
                 break
-            
+        except (UnicodeDecodeError, LookupError) as e:
+            logger.debug(f"Encoding {encoding} failed: {e}")
+            continue
     
     # Step 2: Try chardet suggestion if confidence is high enough
     if chardet_result and detection_confidence >= confidence_threshold:
@@ -67,6 +70,7 @@ def safe_decode(raw_bytes: bytes, decode_errors: str = "replace", suspicious_thr
         # Only use detection if encoding is different from what we tried
         if (guessed_enc and 
             guessed_enc.lower() not in [enc.lower() for enc in attempted_encodings]):
+            try:
                 attempted_encodings.append(guessed_enc)
                 text = raw_bytes.decode(guessed_enc, errors=decode_errors)
                 replacements = text.count("�")
@@ -78,7 +82,8 @@ def safe_decode(raw_bytes: bytes, decode_errors: str = "replace", suspicious_thr
                     best_text = text
                     best_encoding = guessed_enc
                     best_replacements = replacements
-                    
+            except (UnicodeDecodeError, LookupError) as e:
+                logger.debug(f"Chardet encoding {guessed_enc} failed: {e}")
     # Fallback: if somehow we have no result, force UTF-8 with replacement
     if best_text is None:
         logger.warning("All decoding attempts failed, forcing UTF-8 with replacement")
