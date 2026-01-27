@@ -1,23 +1,5 @@
-"""Layer C (Tier-2) classifier inference wrapper.
-
-This layer is only called for *unsure* cases after upstream rule/signature tiers.
-It must be fast, auditable, and production-viable.
-
-Model:
-- TF-IDF word + character n-grams
-- Logistic Regression (class_weight='balanced')
-
-Routing:
-- score < T_low  => allow
-- T_low <= score < T_high => flag (review)
-- score >= T_high => block
-"""
-
-from __future__ import annotations
-
 import time
 from dataclasses import dataclass
-from typing import Dict
 
 import joblib
 from models.LayerCResult import LayerCResult
@@ -25,8 +7,6 @@ from models.LayerCResult import LayerCResult
 
 @dataclass(frozen=True)
 class Thresholds:
-    """Deployment thresholds for routing decisions."""
-
     low: float = 0.35
     high: float = 0.85
 
@@ -38,18 +18,12 @@ class Thresholds:
 
 
 class Classifier:
-    """Tier-2 classifier used by the orchestrator.
-
-    This class loads persisted artifacts and exposes a single-text `predict()`
-    interface that returns a standardized LayerCResult.
-    """
-
     def __init__(
         self,
         vectorizer_path: str,
         model_path: str,
-        low: float = 0.35,
-        high: float = 0.85,
+        low= 0.35,
+        high= 0.85,
         model_version: str = "tf_idf_logreg_v1",
     ):
         self.vectorizer = joblib.load(vectorizer_path)
@@ -60,14 +34,6 @@ class Classifier:
         self.model_version = model_version
 
     def predict(self, input_text: str) -> LayerCResult:
-        """Score a single input string.
-
-        Returns:
-            LayerCResult with:
-            - probability_score: P(prompt_injection=1)
-            - verdict: allow | flag | block (thresholded)
-        """
-
         start_time = time.time()
 
         X = self.vectorizer.transform([input_text])
@@ -80,13 +46,13 @@ class Classifier:
         else:
             verdict = "block"
 
-        # Confidence: distance from the decision boundary (simple, monotonic)
+        # Confidence: distance from the decision boundary
         if verdict == "allow":
             confidence_score = 1.0 - probability_score
         elif verdict == "block":
             confidence_score = probability_score
         else:
-            # Middle band = inherently uncertain
+            # Middle band = uncertain
             confidence_score = 0.5
 
         processing_time_ms = (time.time() - start_time) * 1000.0
@@ -99,7 +65,7 @@ class Classifier:
             model_version=self.model_version,
         )
 
-    def predict_dict(self, input_text: str) -> Dict[str, float | str]:
+    def predict_dict(self, input_text):
         """Something to get a simple dict output for API responses."""
         res = self.predict(input_text)
         return {"score": res.probability_score, "decision": res.verdict}
