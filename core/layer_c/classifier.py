@@ -1,7 +1,9 @@
 import time
 from dataclasses import dataclass
+from typing import List, Tuple, Optional
 
 import joblib
+import numpy as np
 from models.LayerCResult import LayerCResult
 
 
@@ -24,14 +26,12 @@ class Classifier:
         model_path: str,
         low= 0.35,
         high= 0.85,
-        model_version: str = "tf_idf_logreg_v1",
     ):
         self.vectorizer = joblib.load(vectorizer_path)
         self.model = joblib.load(model_path)
 
         self.thresholds = Thresholds(low=low, high=high)
         self.thresholds.validate()
-        self.model_version = model_version
 
     def predict(self, input_text: str) -> LayerCResult:
         start_time = time.time()
@@ -62,7 +62,6 @@ class Classifier:
             probability_score=probability_score,
             confidence_score=confidence_score,
             processing_time_ms=processing_time_ms,
-            model_version=self.model_version,
         )
 
     def predict_dict(self, input_text):
@@ -70,3 +69,54 @@ class Classifier:
         res = self.predict(input_text)
         return {"score": res.probability_score, "decision": res.verdict}
 
+    def grid_search(
+        self,
+        texts: List[str],
+        labels: List[int],
+        low_range: Tuple[float, float, float] = (0.1, 0.5, 0.05),
+        high_range: Tuple[float, float, float] = (0.5, 0.95, 0.05),
+        optimize_for: str = "f1",
+    ):
+        # Pre-compute all probabilities once
+        probs = np.array([
+            self.model.predict_proba(self.vectorizer.transform([t]))[:, 1][0]
+            for t in texts
+        ])
+        labels = np.array(labels) #type:ignore
+        
+        low_vals = np.arange(*low_range)
+        high_vals = np.arange(*high_range)
+        
+        best_score = -1.0
+        best_thresholds = (0.35, 0.85)
+        best_metrics = {}
+        
+        for low in low_vals:
+            for high in high_vals:
+                if low >= high:
+                    continue
+                    
+                # Predict: flag/block (prob >= low) counts as detection
+                preds = (probs >= low).astype(int)
+                
+                tp = ((preds == 1) & (labels == 1)).sum()
+                fp = ((preds == 1) & (labels == 0)).sum()
+                fn = ((preds == 0) & (labels == 1)).sum()
+                
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+                
+                score = {"f1": f1, "recall": recall, "precision": precision}[optimize_for]
+                
+                if score > best_score:
+                    best_score = score
+                    best_thresholds = (low, high)
+                    best_metrics = {"precision": precision, "recall": recall, "f1": f1}
+        
+        return {
+            "best_low": best_thresholds[0],
+            "best_high": best_thresholds[1],
+            "optimized_for": optimize_for,
+            **best_metrics,
+        }

@@ -13,9 +13,6 @@ class LayerCResult:
     # Processing metadata
     processing_time_ms: float
     
-    # Model metadata
-    model_version: str = "tf_idf_logreg_v1"
-    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
         return {
@@ -23,7 +20,6 @@ class LayerCResult:
             'probability_score': self.probability_score,
             'confidence_score': self.confidence_score,
             'processing_time_ms': self.processing_time_ms,
-            'model_version': self.model_version
         }
     
     def get_risk_score(self) -> float:
