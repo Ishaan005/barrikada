@@ -124,21 +124,13 @@ def verdict_breakdown(y_true, verdict):
     return out
 
 
-def tune_routing_thresholds_prod(
+def tune_routing_thresholds(
     y_true,
     scores,
     target_block_precision = 0.99,
     max_malicious_allow_rate = 0.02,
     min_flag_band = 0.05,
 ):
-    """Pick (low, high) using validation data only.
-
-    Policy-style tuning:
-    - enforce a high-precision BLOCK
-    - cap malicious samples that slip through as ALLOW
-    - choose thresholds to minimize FLAG (LM load), then BLOCKs, then maximize ALLOWs
-    """
-
     y = np.asarray(y_true).astype(int)
     s = np.asarray(scores)
 
@@ -232,7 +224,7 @@ def train_eval(X, y, low = None, high = None):
 
     tuned = None
     if low is None or high is None:
-        tuned = tune_routing_thresholds_prod(y_val.to_numpy(),val_scores)
+        tuned = tune_routing_thresholds(y_val.to_numpy(),val_scores)
         low = float(tuned["low"])
         high = float(tuned["high"])
 
