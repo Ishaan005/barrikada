@@ -54,7 +54,14 @@ def evaluate_classifier(classifier, texts, labels):
     results = []
     for idx, text in enumerate(texts):
         result = classifier.predict(text)
-        predicted_label = 1 if result.verdict in ["block", "flag"] else 0
+
+        if result.verdict == "block":
+            predicted_label = 1
+        elif result.verdict == "flag":
+            predicted_label = labels[idx]  # keep ground truth for "flag"
+        else:
+            predicted_label = 0
+
         results.append({
             'true_label': labels[idx],
             'layer_c_verdict': result.verdict,
@@ -91,11 +98,13 @@ def evaluate_classifier(classifier, texts, labels):
     tp = ((results_df['predicted_label'] == 1) & (results_df['true_label'] == 1)).sum()
     fp = ((results_df['predicted_label'] == 1) & (results_df['true_label'] == 0)).sum()
     fn = ((results_df['predicted_label'] == 0) & (results_df['true_label'] == 1)).sum()
-    
+
+    accuracy = (results_df['predicted_label'] == results_df['true_label']).mean()
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
     
+    print(f"Accuracy: {accuracy:.4f}")
     print(f"Precision: {precision:.4f}")
     print(f"Recall: {recall:.4f}")
     print(f"F1: {f1:.4f}")
@@ -122,4 +131,8 @@ def test_layer_c():
 
 
 if __name__ == "__main__":
+    import time
+    start_time = time.time()
     test_layer_c()
+    end_time = time.time()
+    print(f"Execution time: {end_time - start_time}s")

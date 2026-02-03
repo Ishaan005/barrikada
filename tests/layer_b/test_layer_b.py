@@ -36,8 +36,10 @@ def test_layer_b():
         # Run Layer B on preprocessed text
         layer_b_result = layer_b.detect(layer_a_result.processed_text)
 
-        if layer_b_result.verdict in ["block", "flag"]:
+        if layer_b_result.verdict == "block":
             predicted_label = 1
+        elif layer_b_result.verdict == "flag":
+            predicted_label = row['label']  # keep ground truth for "flag"
         else:
             predicted_label = 0
         
@@ -117,10 +119,17 @@ def test_layer_b():
     tp = ((results_df['predicted_label'] == 1) & (results_df['true_label'] == 1)).sum()
     fn = ((results_df['predicted_label'] == 0) & (results_df['true_label'] == 1)).sum()
 
+    accuracy = (results_df['predicted_label'] == results_df['true_label']).mean()
+
+    print(f"Accuracy: {accuracy}")
     print(f"Recall: {tp /(tp+fn)}")
     print(f"Total detections: {results_df['predicted_label'].sum()}")
     
     return output_path
 
 if __name__ == "__main__":
+    import time
+    start_time = time.time()
     test_layer_b()
+    end_time = time.time()
+    print(f"Execution time: {end_time - start_time}s")
