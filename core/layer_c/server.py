@@ -10,10 +10,12 @@ settings = Settings()
 app = FastAPI(title = "Barrikada")
 MODEL_PATH = settings.model_path
 VECTORIZER_PATH = settings.vectorizer_path
+REDUCER_PATH = settings.reducer_path
 
 clf = Classifier(
     vectorizer_path=VECTORIZER_PATH,
     model_path=MODEL_PATH,
+    reducer_path=REDUCER_PATH,
     low=settings.layer_c_low_threshold,
     high=settings.layer_c_high_threshold,
 )

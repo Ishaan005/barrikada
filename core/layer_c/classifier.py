@@ -24,10 +24,12 @@ class Classifier:
         self,
         vectorizer_path: str,
         model_path: str,
+        reducer_path: Optional[str] = None,
         low= 0.35,
         high= 0.85,
     ):
         self.vectorizer = joblib.load(vectorizer_path)
+        self.reducer = joblib.load(reducer_path) if reducer_path else None
         self.model = joblib.load(model_path)
 
         self.thresholds = Thresholds(low=low, high=high)
@@ -37,6 +39,8 @@ class Classifier:
         start_time = time.time()
 
         X = self.vectorizer.transform([input_text])
+        if self.reducer is not None:
+            X = self.reducer.transform(X)
         probability_score = self.model.predict_proba(X)[:, 1][0]
 
         if probability_score < self.thresholds.low:
@@ -78,10 +82,10 @@ class Classifier:
         optimize_for: str = "f1",
     ):
         # Pre-compute all probabilities once
-        probs = np.array([
-            self.model.predict_proba(self.vectorizer.transform([t]))[:, 1][0]
-            for t in texts
-        ])
+        X_vec = self.vectorizer.transform(texts)
+        if self.reducer is not None:
+            X_vec = self.reducer.transform(X_vec)
+        probs = self.model.predict_proba(X_vec)[:, 1]
         labels = np.array(labels) #type:ignore
         
         low_vals = np.arange(*low_range)

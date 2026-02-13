@@ -1,7 +1,7 @@
 """Small training script for Layer C (Tier-2 ML).
 
-Baseline: TF-IDF (word + char) + Logistic Regression.
-Saves artifacts + prints metrics + writes top features.
+Pipeline: TF-IDF (word + char) → PCA (TruncatedSVD) → XGBoost.
+Saves artifacts + prints metrics + writes evaluation report.
 """
 
 import argparse
@@ -31,6 +31,11 @@ def main():
         help="Path to write vectorizer artifact (.joblib)",
     )
     parser.add_argument(
+        "--pca-out",
+        default=settings.reducer_path,
+        help="Path to write PCA reducer artifact (.joblib)",
+    )
+    parser.add_argument(
         "--model-out",
         default=settings.model_path,
         help="Path to write model artifact (.joblib)",
@@ -48,12 +53,18 @@ def main():
     out = train_eval(X, y)
 
     vec = out["vectorizer"]
+    reducer = out["reducer"]
     model = out["model"]
     thresholds = out["thresholds"]
     metrics = out["metrics"]
+    pca_info = out["pca"]
 
-    save(vec, model, args.vectorizer_out, args.model_out)
-    write_json(args.report_out, {"thresholds": thresholds, "metrics": metrics})
+    save(vec, reducer, model, args.vectorizer_out, args.pca_out, args.model_out)
+    write_json(args.report_out, {
+        "thresholds": thresholds,
+        "metrics": metrics,
+        "pca": pca_info,
+    })
 
     # Console output for quick feedback
     print("\n=== Layer C (Tier-2) Evaluation ===")

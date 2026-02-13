@@ -51,7 +51,8 @@ def filter_through_layer_b(texts, labels):
 def filter_through_layer_c(texts, labels):
     layer_c = Classifier(
         vectorizer_path="core/layer_c/outputs/tf_idf_vectorizer.joblib",
-        model_path="core/layer_c/outputs/tf_idf_logreg.joblib",
+        model_path="core/layer_c/outputs/classifier.joblib",
+        reducer_path="core/layer_c/outputs/pca_reducer.joblib",
         low =0.35, 
         high=0.50
     )

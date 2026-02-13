@@ -118,7 +118,8 @@ def test_layer_c():
     
     classifier = Classifier(
         vectorizer_path="core/layer_c/outputs/tf_idf_vectorizer.joblib",
-        model_path="core/layer_c/outputs/tf_idf_logreg.joblib",
+        model_path="core/layer_c/outputs/classifier.joblib",
+        reducer_path="core/layer_c/outputs/pca_reducer.joblib",
         low =0.35, 
         high=0.50
     )

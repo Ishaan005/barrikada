@@ -44,9 +44,13 @@ class Settings(BaseModel):
     
     @property
     def model_path(self) -> str:
-        return str(self._project_root / "core/layer_c" / "outputs" / "tf_idf_logreg.joblib")
+        return str(self._project_root / "core/layer_c" / "outputs" / "classifier.joblib")
     
     @property
     def vectorizer_path(self) -> str:
         return str(self._project_root / "core/layer_c" / "outputs" / "tf_idf_vectorizer.joblib")
+
+    @property
+    def reducer_path(self) -> str:
+        return str(self._project_root / "core/layer_c" / "outputs" / "pca_reducer.joblib")
 
