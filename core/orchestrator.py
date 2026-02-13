@@ -34,6 +34,7 @@ class PIPipeline:
         self.layer_c_classifier = Classifier(
             vectorizer_path=settings.vectorizer_path,
             model_path=settings.model_path,
+            reducer_path=settings.reducer_path,
             low=settings.layer_c_low_threshold,
             high=settings.layer_c_high_threshold,
         )

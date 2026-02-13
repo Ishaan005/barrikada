@@ -1,5 +1,6 @@
 """Utilities for training Layer C (Tier-2 ML).
 
+Pipeline: TF-IDF (word + char) → PCA (TruncatedSVD) → XGBoost.
 Keep `train.py` focused on CLI + orchestration.
 """
 
@@ -11,11 +12,12 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, f1_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import FeatureUnion
+from xgboost import XGBClassifier
 
 SEED = 42
 
@@ -59,11 +61,6 @@ def load_data(csv_path):
             if layer_b_result.verdict == "allow" and getattr(layer_b_result, "allowlisted", False):
                 allowlisted_allow += 1
 
-    used_n = len(layer_c_results)
-    print(f"Filtered to {used_n} samples that would reach Layer C (orchestrator routing).")
-    print(f"  allowlisted early-allow skipped: {allowlisted_allow}")
-    print(f"  non-allowlisted allow (goes to Layer C): {non_allowlisted_allow}")
-
     X = pd.Series([t for (t, _) in layer_c_results], name="processed_text")
     y = pd.Series([lab for (_, lab) in layer_c_results], name="label")
     used_df = pd.DataFrame({"processed_text": X, "label": y})
@@ -75,21 +72,33 @@ def make_vectorizer():
     char = TfidfVectorizer(ngram_range=(3, 5), analyzer="char_wb", min_df=2)
     return FeatureUnion([("word", word), ("char", char)])  # type: ignore
 
-def make_model():
-    return LogisticRegression(
-        solver="saga",
-        max_iter=4000,
-        class_weight="balanced",
+def make_reducer(n_components: int = 200):
+    """TruncatedSVD — the sparse-matrix equivalent of PCA (a.k.a. LSA)."""
+    return TruncatedSVD(n_components=n_components, random_state=SEED)
+
+
+def make_model(n_pos: int, n_neg: int):
+    """Create XGBoost classifier with class imbalance handling."""
+    scale_pos = max(1.0, n_neg / max(1, n_pos))
+    return XGBClassifier(
+        n_estimators=300,
+        max_depth=6,
+        learning_rate=0.1,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        scale_pos_weight=scale_pos,
+        eval_metric="logloss",
         n_jobs=-1,
         random_state=SEED,
     )
 
 
-def save(vec, model, vectorizer_path, model_path):
-    Path(vectorizer_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(model_path).parent.mkdir(parents=True, exist_ok=True)
+def save(vec, reducer, model, vectorizer_path, reducer_path, model_path):
+    for p in (vectorizer_path, reducer_path, model_path):
+        Path(p).parent.mkdir(parents=True, exist_ok=True)
 
     joblib.dump(vec, vectorizer_path)
+    joblib.dump(reducer, reducer_path)
     joblib.dump(model, model_path)
 
 
@@ -209,12 +218,27 @@ def train_eval(X, y, low = None, high = None):
         X_temp, y_temp, test_size=0.50, stratify=y_temp, random_state=SEED
     )
 
+    # tfidf vectorizer
     vec = make_vectorizer()
-    X_train_vec = vec.fit_transform(X_train)
-    X_val_vec = vec.transform(X_val)
-    X_test_vec = vec.transform(X_test)
+    X_train_tfidf = vec.fit_transform(X_train)
+    X_val_tfidf = vec.transform(X_val)
+    X_test_tfidf = vec.transform(X_test)
 
-    model = make_model()
+    # pca
+    n_components = min(200, X_train_tfidf.shape[1] - 1, X_train_tfidf.shape[0] - 1)
+    reducer = make_reducer(n_components=n_components)
+    X_train_vec = reducer.fit_transform(X_train_tfidf)
+    X_val_vec = reducer.transform(X_val_tfidf)
+    X_test_vec = reducer.transform(X_test_tfidf)
+
+    explained_var = float(np.sum(reducer.explained_variance_ratio_))
+    print(f"PCA: {X_train_tfidf.shape[1]} features → {n_components} components "
+          f"({explained_var:.2%} variance explained)")
+
+    # --- XGBoost ---
+    n_pos = int(np.sum(y_train == 1))
+    n_neg = int(np.sum(y_train == 0))
+    model = make_model(n_pos, n_neg)
     model.fit(X_train_vec, y_train)
 
     val_scores = model.predict_proba(X_val_vec)[:, 1]
@@ -236,11 +260,16 @@ def train_eval(X, y, low = None, high = None):
 
     return {
         "vectorizer": vec,
+        "reducer": reducer,
         "model": model,
         "thresholds": {
             "low": float(low),
             "high": float(high),
             "tuning": (None if tuned is None else tuned),
+        },
+        "pca": {
+            "n_components": n_components,
+            "explained_variance": explained_var,
         },
         "metrics": {
             "val": {
