@@ -119,9 +119,6 @@ def analyze_text(input_bytes):
 def _calculate_confidence(flags: list) -> float:
     """
     Calculate confidence score based on detected flags
-    
-    High confidence detections: direction_override, embedded_encodings
-    Medium confidence: confusable_chars, suspicious_encoding
     """
     if not flags:
         return 1.0  # High confidence in clean text

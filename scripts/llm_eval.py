@@ -3,7 +3,6 @@ from litellm import completion
 import json
 from pathlib import Path
 
-import litellm
 # litellm._turn_on_debug() #type:ignore
 
 # -------- Config --------
