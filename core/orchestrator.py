@@ -7,6 +7,10 @@ Flow:
     - If SAFE (allowlisted) => final verdict = allow
     - If unsure (flag) => send to Layer C
 3) Layer C makes the final decision only for unsure cases.
+    - If block or allow => final verdict
+    - If flag (uncertain) => escalate to Layer E
+4) Layer E (LLM judge) is the final arbiter for cases that remain
+   uncertain after all prior layers.
 
 Each layer makes its own decision; we do not aggregate scores.
 """
@@ -26,11 +30,12 @@ class PIPipeline:
         from core.layer_a.pipeline import analyze_text
         from core.layer_b.signature_engine import SignatureEngine
         from core.layer_c.classifier import Classifier
+        from core.layer_e.llm_judge import LLMJudge
+
+        settings = Settings()
 
         self.layer_a_analyze = analyze_text
         self.layer_b_engine = SignatureEngine()
-
-        settings = Settings()
         self.layer_c_classifier = Classifier(
             vectorizer_path=settings.vectorizer_path,
             model_path=settings.model_path,
@@ -38,6 +43,7 @@ class PIPipeline:
             low=settings.layer_c_low_threshold,
             high=settings.layer_c_high_threshold,
         )
+        self.layer_e_judge = LLMJudge()
 
     def detect(self, input_text: str) -> PipelineResult:
         start_time = time.time()
@@ -59,6 +65,8 @@ class PIPipeline:
                 layer_b_time_ms=None,
                 layer_c_result=None,
                 layer_c_time_ms=None,
+                layer_e_result=None,
+                layer_e_time_ms=None,
                 final_verdict=FinalVerdict.BLOCK,
                 decision_layer=DecisionLayer.LAYER_A,
                 confidence_score=layer_a_result.confidence_score,
@@ -79,6 +87,8 @@ class PIPipeline:
                 layer_b_time_ms=layer_b_result.processing_time_ms,
                 layer_c_result=None,
                 layer_c_time_ms=None,
+                layer_e_result=None,
+                layer_e_time_ms=None,
                 final_verdict=FinalVerdict.ALLOW,
                 decision_layer=DecisionLayer.LAYER_B,
                 confidence_score=layer_b_result.confidence_score,
@@ -96,6 +106,8 @@ class PIPipeline:
                 layer_b_time_ms=layer_b_result.processing_time_ms,
                 layer_c_result=None,
                 layer_c_time_ms=None,
+                layer_e_result=None,
+                layer_e_time_ms=None,
                 final_verdict=FinalVerdict.BLOCK,
                 decision_layer=DecisionLayer.LAYER_B,
                 confidence_score=layer_b_result.confidence_score,
@@ -105,6 +117,41 @@ class PIPipeline:
         # For security: anything not allowlisted SAFE is screened by Layer C.
         # This prevents malicious prompts with no signature hits from being allowed.
         layer_c_result = self.layer_c_classifier.predict(analysis_text)
+
+        if layer_c_result.verdict == "block" or layer_c_result.verdict == "allow":
+            total_time = (time.time() - start_time) * 1000
+            return PipelineResult(
+                input_hash=input_hash,
+                total_processing_time_ms=total_time,
+                layer_a_result=layer_a_result.to_dict(),
+                layer_a_time_ms=layer_a_result.processing_time_ms,
+                layer_b_result=layer_b_result.to_dict(),
+                layer_b_time_ms=layer_b_result.processing_time_ms,
+                layer_c_result=layer_c_result.to_dict(),
+                layer_c_time_ms=layer_c_result.processing_time_ms,
+                layer_e_result=None,
+                layer_e_time_ms=None,
+                final_verdict=FinalVerdict(layer_c_result.verdict),
+                decision_layer=DecisionLayer.LAYER_C,
+                confidence_score=layer_c_result.confidence_score,
+            )
+    
+        # ----- Layer E -----
+        layer_e_start = time.time()
+        layer_e_result = self.layer_e_judge.call_judge(analysis_text)
+        layer_e_time_ms = (time.time() - layer_e_start) * 1000
+
+        # Fallback if LLM judge returns None unexpectedly
+        if layer_e_result is None:
+            layer_e_result_dict = {"label": 1, "rationale": "LLM judge returned None"}
+            layer_e_verdict = FinalVerdict.BLOCK
+        else:
+            layer_e_result_dict = {
+                "label": layer_e_result.label,
+                "rationale": layer_e_result.rationale,
+            }
+            # Map JudgeOutput label (0=benign, 1=malicious) to FinalVerdict
+            layer_e_verdict = FinalVerdict.BLOCK if layer_e_result.label == 1 else FinalVerdict.ALLOW
 
         total_time = (time.time() - start_time) * 1000
         return PipelineResult(
@@ -116,9 +163,11 @@ class PIPipeline:
             layer_b_time_ms=layer_b_result.processing_time_ms,
             layer_c_result=layer_c_result.to_dict(),
             layer_c_time_ms=layer_c_result.processing_time_ms,
-            final_verdict=FinalVerdict(layer_c_result.verdict),
-            decision_layer=DecisionLayer.LAYER_C,
-            confidence_score=layer_c_result.confidence_score,
+            layer_e_result=layer_e_result_dict,
+            layer_e_time_ms=layer_e_time_ms,
+            final_verdict=layer_e_verdict,
+            decision_layer=DecisionLayer.LAYER_E,
+            confidence_score=1.0,  # LLM judge gives binary decisions
         )
 
     

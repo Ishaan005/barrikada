@@ -77,7 +77,7 @@ def filter_through_layer_c(texts, labels):
     return flagged_texts, flagged_labels
 
 def evaluate_llm_judge(texts, labels):
-    from core.layer_e.llm_judge import call_judge
+    from core.layer_e.llm_judge import LLMJudge
     
     layer_e_start = time.time()
     results = []
@@ -85,7 +85,8 @@ def evaluate_llm_judge(texts, labels):
         if idx % 10 == 0:
             print(f"Processing {idx}/{len(texts)}...")
         
-        result = call_judge(text)
+        judge = LLMJudge(temperature=0.0)  # deterministic
+        result = judge.call_judge(text)
         if result is None:
             # Skip if LLM call failed
             print("Result was None")

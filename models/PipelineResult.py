@@ -19,10 +19,14 @@ class PipelineResult:
     # Layer C results
     layer_c_result: Dict[str, Any] | None
     layer_c_time_ms: float | None
+
+    # Layer E results (LLM judge)
+    layer_e_result: Dict[str, Any] | None
+    layer_e_time_ms: float | None
     
     # Final decision (decision cascade)
     final_verdict: FinalVerdict
-    decision_layer: DecisionLayer  # "A", "B", or "C"
+    decision_layer: DecisionLayer  # "A", "B", "C", or "E"
     confidence_score: float  # confidence of the deciding layer
 
     def to_dict(self) -> Dict[str, Any]:
@@ -36,6 +40,8 @@ class PipelineResult:
             'layer_b_time_ms': self.layer_b_time_ms,
             'layer_c_result': self.layer_c_result,
             'layer_c_time_ms': self.layer_c_time_ms,
+            'layer_e_result': self.layer_e_result,
+            'layer_e_time_ms': self.layer_e_time_ms,
             'final_verdict': self.final_verdict.value,
             'decision_layer': self.decision_layer.value,
             'confidence_score': self.confidence_score,
