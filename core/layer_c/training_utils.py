@@ -1,7 +1,6 @@
-"""Utilities for training Layer C (Tier-2 ML).
+"""Utilities for training Layer C.
 
 Pipeline: TF-IDF (word + char) → PCA (TruncatedSVD) → XGBoost.
-Keep `train.py` focused on CLI + orchestration.
 """
 
 from __future__ import annotations
@@ -75,7 +74,6 @@ def make_vectorizer():
 def make_reducer(n_components: int = 200):
     """TruncatedSVD — the sparse-matrix equivalent of PCA (a.k.a. LSA)."""
     return TruncatedSVD(n_components=n_components, random_state=SEED)
-
 
 def make_model(n_pos: int, n_neg: int):
     """Create XGBoost classifier with class imbalance handling."""
