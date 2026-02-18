@@ -45,6 +45,36 @@ class PIPipeline:
         )
         self.layer_e_judge = LLMJudge()
 
+    def _create_result(
+        self,
+        input_hash,
+        start_time,
+        layer_a_result,
+        final_verdict: FinalVerdict,
+        decision_layer: DecisionLayer,
+        confidence_score: float,
+        layer_b_result=None,
+        layer_c_result=None,
+        layer_e_result_dict=None,
+        layer_e_time_ms=None,
+    ):
+        total_time = (time.time() - start_time) * 1000
+        return PipelineResult(
+            input_hash=input_hash,
+            total_processing_time_ms=total_time,
+            layer_a_result=layer_a_result.to_dict(),
+            layer_a_time_ms=layer_a_result.processing_time_ms,
+            layer_b_result=layer_b_result.to_dict() if layer_b_result else None,
+            layer_b_time_ms=layer_b_result.processing_time_ms if layer_b_result else None,
+            layer_c_result=layer_c_result.to_dict() if layer_c_result else None,
+            layer_c_time_ms=layer_c_result.processing_time_ms if layer_c_result else None,
+            layer_e_result=layer_e_result_dict,
+            layer_e_time_ms=layer_e_time_ms,
+            final_verdict=final_verdict,
+            decision_layer=decision_layer,
+            confidence_score=confidence_score,
+        )
+
     def detect(self, input_text: str) -> PipelineResult:
         start_time = time.time()
         input_hash = hashlib.sha256(input_text.encode()).hexdigest()[:16]
@@ -55,18 +85,8 @@ class PIPipeline:
 
         # Hard-block from Layer A (high-confidence flags)
         if layer_a_result.get_verdict() == "block":
-            total_time = (time.time() - start_time) * 1000
-            return PipelineResult(
-                input_hash=input_hash,
-                total_processing_time_ms=total_time,
-                layer_a_result=layer_a_result.to_dict(),
-                layer_a_time_ms=layer_a_result.processing_time_ms,
-                layer_b_result=None,
-                layer_b_time_ms=None,
-                layer_c_result=None,
-                layer_c_time_ms=None,
-                layer_e_result=None,
-                layer_e_time_ms=None,
+            return self._create_result(
+                input_hash, start_time, layer_a_result,
                 final_verdict=FinalVerdict.BLOCK,
                 decision_layer=DecisionLayer.LAYER_A,
                 confidence_score=layer_a_result.confidence_score,
@@ -77,18 +97,9 @@ class PIPipeline:
 
         # SAFE allowlisting => allow immediately (optimization)
         if (not layer_a_result.suspicious) and getattr(layer_b_result, "allowlisted", False):
-            total_time = (time.time() - start_time) * 1000
-            return PipelineResult(
-                input_hash=input_hash,
-                total_processing_time_ms=total_time,
-                layer_a_result=layer_a_result.to_dict(),
-                layer_a_time_ms=layer_a_result.processing_time_ms,
-                layer_b_result=layer_b_result.to_dict(),
-                layer_b_time_ms=layer_b_result.processing_time_ms,
-                layer_c_result=None,
-                layer_c_time_ms=None,
-                layer_e_result=None,
-                layer_e_time_ms=None,
+            return self._create_result(
+                input_hash, start_time, layer_a_result,
+                layer_b_result=layer_b_result,
                 final_verdict=FinalVerdict.ALLOW,
                 decision_layer=DecisionLayer.LAYER_B,
                 confidence_score=layer_b_result.confidence_score,
@@ -96,18 +107,9 @@ class PIPipeline:
 
         # MALICIOUS signatures => block immediately
         if layer_b_result.verdict == "block":
-            total_time = (time.time() - start_time) * 1000
-            return PipelineResult(
-                input_hash=input_hash,
-                total_processing_time_ms=total_time,
-                layer_a_result=layer_a_result.to_dict(),
-                layer_a_time_ms=layer_a_result.processing_time_ms,
-                layer_b_result=layer_b_result.to_dict(),
-                layer_b_time_ms=layer_b_result.processing_time_ms,
-                layer_c_result=None,
-                layer_c_time_ms=None,
-                layer_e_result=None,
-                layer_e_time_ms=None,
+            return self._create_result(
+                input_hash, start_time, layer_a_result,
+                layer_b_result=layer_b_result,
                 final_verdict=FinalVerdict.BLOCK,
                 decision_layer=DecisionLayer.LAYER_B,
                 confidence_score=layer_b_result.confidence_score,
@@ -119,18 +121,10 @@ class PIPipeline:
         layer_c_result = self.layer_c_classifier.predict(analysis_text)
 
         if layer_c_result.verdict == "block" or layer_c_result.verdict == "allow":
-            total_time = (time.time() - start_time) * 1000
-            return PipelineResult(
-                input_hash=input_hash,
-                total_processing_time_ms=total_time,
-                layer_a_result=layer_a_result.to_dict(),
-                layer_a_time_ms=layer_a_result.processing_time_ms,
-                layer_b_result=layer_b_result.to_dict(),
-                layer_b_time_ms=layer_b_result.processing_time_ms,
-                layer_c_result=layer_c_result.to_dict(),
-                layer_c_time_ms=layer_c_result.processing_time_ms,
-                layer_e_result=None,
-                layer_e_time_ms=None,
+            return self._create_result(
+                input_hash, start_time, layer_a_result,
+                layer_b_result=layer_b_result,
+                layer_c_result=layer_c_result,
                 final_verdict=FinalVerdict(layer_c_result.verdict),
                 decision_layer=DecisionLayer.LAYER_C,
                 confidence_score=layer_c_result.confidence_score,
@@ -153,17 +147,11 @@ class PIPipeline:
             # Map JudgeOutput label (0=benign, 1=malicious) to FinalVerdict
             layer_e_verdict = FinalVerdict.BLOCK if layer_e_result.label == 1 else FinalVerdict.ALLOW
 
-        total_time = (time.time() - start_time) * 1000
-        return PipelineResult(
-            input_hash=input_hash,
-            total_processing_time_ms=total_time,
-            layer_a_result=layer_a_result.to_dict(),
-            layer_a_time_ms=layer_a_result.processing_time_ms,
-            layer_b_result=layer_b_result.to_dict(),
-            layer_b_time_ms=layer_b_result.processing_time_ms,
-            layer_c_result=layer_c_result.to_dict(),
-            layer_c_time_ms=layer_c_result.processing_time_ms,
-            layer_e_result=layer_e_result_dict,
+        return self._create_result(
+            input_hash, start_time, layer_a_result,
+            layer_b_result=layer_b_result,
+            layer_c_result=layer_c_result,
+            layer_e_result_dict=layer_e_result_dict,
             layer_e_time_ms=layer_e_time_ms,
             final_verdict=layer_e_verdict,
             decision_layer=DecisionLayer.LAYER_E,
