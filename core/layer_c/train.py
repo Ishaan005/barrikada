@@ -45,11 +45,16 @@ def main():
         default=str(Path("test_results") / "layer_c_eval_latest.json"),
         help="Path to write evaluation report (.json)",
     )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable caching of Layer A+B filtered data",
+    )
 
     args = parser.parse_args()
 
     # Default behavior: train only on samples that would reach Layer C.
-    X, y, df = load_data(args.csv)
+    X, y, df = load_data(args.csv, use_cache=not args.no_cache)
     out = train_eval(X, y)
 
     vec = out["vectorizer"]
