@@ -12,10 +12,8 @@ class Settings(BaseModel):
     # ----- Layer B (signatures) -----
     # Scoring/thresholds
     layer_b_allow_confidence: float = 0.99
-    layer_b_block_min_hits: int = 2
-    # To make hard-blocks rare/high-precision, require the matched rules to have
-    # very high extracted precision (from YARA meta). Otherwise, we only FLAG.
-    layer_b_block_min_rule_precision: float = 0.99
+    layer_b_block_min_hits: int = 1
+    layer_b_block_min_rule_precision: float = 0.95
     layer_b_flag_confidence: float = 0.85
     layer_b_block_confidence: float = 0.95
 
