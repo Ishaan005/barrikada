@@ -37,9 +37,8 @@ class PIPipeline:
         self.layer_a_analyze = analyze_text
         self.layer_b_engine = SignatureEngine()
         self.layer_c_classifier = Classifier(
-            vectorizer_path=settings.vectorizer_path,
             model_path=settings.model_path,
-            reducer_path=settings.reducer_path,
+            embedding_model=settings.layer_c_embedding_model,
             low=settings.layer_c_low_threshold,
             high=settings.layer_c_high_threshold,
         )

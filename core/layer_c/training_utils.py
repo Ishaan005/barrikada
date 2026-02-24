@@ -1,6 +1,6 @@
 """Utilities for training Layer C.
 
-Pipeline: TF-IDF (word + char) → PCA (TruncatedSVD) → XGBoost.
+Pipeline: SentenceTransformer embeddings + meta-features -> XGBoost.
 """
 
 from __future__ import annotations
@@ -13,11 +13,10 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.decomposition import TruncatedSVD
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import classification_report, f1_score, roc_auc_score
 from sklearn.model_selection import train_test_split
-from sklearn.pipeline import FeatureUnion
+from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 from xgboost import XGBClassifier
 
@@ -44,7 +43,7 @@ def would_reach_layer_c(layer_a_result, layer_b_result):
     return True
 
 
-def _cache_key(csv_path: str) -> str:
+def _cache_key(csv_path):
     """Produce a deterministic cache key from the CSV path + file content hash."""
     p = Path(csv_path)
     h = hashlib.md5()
@@ -61,16 +60,15 @@ def _cache_key(csv_path: str) -> str:
 
 
 def load_data(csv_path, *, use_cache: bool = True):
-    """Load dataset, run Layer A + B filtering, return (X, y, df).
+    """Load dataset and run Layer A + B filtering.
 
     Results are cached to disk so subsequent runs skip the expensive
     per-row Layer-A/B inference. The cache is invalidated automatically
-    when the source CSV changes (size or content hash).
+    when the source CSV changes.
     """
     from core.layer_a.pipeline import analyze_text
     from core.layer_b.signature_engine import SignatureEngine
 
-    # --- Cache lookup -------------------------------------------------
     cache_path: Path | None = None
     if use_cache:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -84,7 +82,7 @@ def load_data(csv_path, *, use_cache: bool = True):
             y = used_df["label"]
             return X, y, used_df
 
-    # --- Full pass through Layer A + B --------------------------------
+    #Full pass through Layer A + B
     df = pd.read_csv(csv_path)
     y_all = df["label"].astype(int)
 
@@ -119,7 +117,7 @@ def load_data(csv_path, *, use_cache: bool = True):
         f"(allowlisted_allow={allowlisted_allow}, non_allowlisted_allow={non_allowlisted_allow})"
     )
 
-    # --- Persist cache ------------------------------------------------
+    # persist cache
     if use_cache and cache_path is not None:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         used_df.to_parquet(cache_path, index=False)
@@ -127,33 +125,15 @@ def load_data(csv_path, *, use_cache: bool = True):
 
     return X, y, used_df
 
-def make_vectorizer():
-    s = _settings
-    word = TfidfVectorizer(
-        ngram_range=s.layer_c_tfidf_word_ngram_range,
-        analyzer="word",
-        min_df=s.layer_c_tfidf_min_df,
-        max_df=s.layer_c_tfidf_max_df,
-        max_features=s.layer_c_tfidf_word_max_features,
-        sublinear_tf=True,
-    )
-    char = TfidfVectorizer(
-        ngram_range=s.layer_c_tfidf_char_ngram_range,
-        analyzer="char_wb",
-        min_df=s.layer_c_tfidf_min_df,
-        max_df=s.layer_c_tfidf_max_df,
-        max_features=s.layer_c_tfidf_char_max_features,
-        sublinear_tf=True,
-    )
-    return FeatureUnion([("word", word), ("char", char)])  # type: ignore
+def encode_texts(texts, model: SentenceTransformer, batch_size: int | None = None):
+    """Encode texts to dense embeddings using SentenceTransformer."""
+    if batch_size is None:
+        batch_size = _settings.layer_c_embedding_batch_size
+    texts_list = list(texts)
+    return model.encode(texts_list, batch_size=batch_size, show_progress_bar=True, normalize_embeddings=True)
 
-def make_reducer(n_components: int | None = None):
-    """TruncatedSVD — the sparse-matrix equivalent of PCA (a.k.a. LSA)."""
-    if n_components is None:
-        n_components = _settings.layer_c_svd_components
-    return TruncatedSVD(n_components=n_components, random_state=SEED)
 
-def make_model(n_pos: int, n_neg: int):
+def make_model(n_pos, n_neg):
     """Create XGBoost classifier with class imbalance handling."""
     s = _settings
     scale_pos = max(1.0, n_neg / max(1, n_pos))
@@ -166,19 +146,18 @@ def make_model(n_pos: int, n_neg: int):
         scale_pos_weight=scale_pos,
         eval_metric="logloss",
         early_stopping_rounds=s.layer_c_xgb_early_stopping_rounds,
+        tree_method=s.layer_c_xgb_tree_method,
+        reg_alpha=s.layer_c_xgb_reg_alpha,
+        reg_lambda=s.layer_c_xgb_reg_lambda,
+        min_child_weight=s.layer_c_xgb_min_child_weight,
+        gamma=s.layer_c_xgb_gamma,
         n_jobs=-1,
         random_state=SEED,
     )
 
 
-def save(vec, reducer, model, vectorizer_path, reducer_path, model_path):
-    for p in (vectorizer_path, reducer_path, model_path):
-        Path(p).parent.mkdir(parents=True, exist_ok=True)
-
-    joblib.dump(vec, vectorizer_path)
-    # reducer may be None when SVD is skipped
-    if reducer is not None:
-        joblib.dump(reducer, reducer_path)
+def save(model, model_path):
+    Path(model_path).parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, model_path)
 
 
@@ -218,6 +197,7 @@ def tune_routing_thresholds(
     scores,
     target_block_precision: float | None = None,
     max_malicious_allow_rate: float | None = None,
+    max_safe_fpr: float | None = None,
     min_flag_band: float | None = None,
 ):
     cfg = _settings
@@ -225,6 +205,8 @@ def tune_routing_thresholds(
         target_block_precision = cfg.layer_c_tune_target_block_precision
     if max_malicious_allow_rate is None:
         max_malicious_allow_rate = cfg.layer_c_tune_max_malicious_allow_rate
+    if max_safe_fpr is None:
+        max_safe_fpr = cfg.layer_c_tune_max_safe_fpr
     if min_flag_band is None:
         min_flag_band = cfg.layer_c_tune_min_flag_band
 
@@ -237,7 +219,9 @@ def tune_routing_thresholds(
 
     # Pre-compute label masks for vectorised scoring
     is_mal = y == 1
+    is_safe = ~is_mal
     mal_total = max(1, int(np.sum(is_mal)))
+    safe_total = max(1, int(np.sum(is_safe)))
 
     best = None
     for low in low_grid:
@@ -252,16 +236,20 @@ def tune_routing_thresholds(
 
             # Check block precision
             tp_block = np.sum(pred_block & is_mal)
-            fp_block = np.sum(pred_block & (~is_mal))
+            fp_block = np.sum(pred_block & is_safe)
             block_precision = (tp_block / (tp_block + fp_block)) if (tp_block + fp_block) else 1.0
 
-            #if blocking isnt accurate enough, next pair pls
             if block_precision < target_block_precision:
                 continue
 
             # Don't allow too many malicious through
             mal_allow_rate = np.sum(pred_allow & is_mal) / mal_total
             if mal_allow_rate > max_malicious_allow_rate:
+                continue
+
+            # Limit false-positive rate on safe texts (flag + block)
+            safe_fpr = float(np.sum((pred_flag | pred_block) & is_safe) / safe_total)
+            if safe_fpr > max_safe_fpr:
                 continue
 
             flag_rate = float(np.mean(pred_flag))
@@ -285,6 +273,7 @@ def tune_routing_thresholds(
                         "val_flag_rate": flag_rate,
                         "val_block_rate": block_rate,
                         "val_allow_rate": allow_rate,
+                        "val_safe_fpr": safe_fpr,
                         "val_block_precision": float(block_precision),
                         "val_block_recall": block_recall,
                         "val_malicious_allow_rate": float(mal_allow_rate),
@@ -315,25 +304,23 @@ def train_eval(X, y, low=None, high=None):
         X_temp, y_temp, test_size=s.layer_c_test_split, stratify=y_temp, random_state=SEED
     )
 
-    # --- TF-IDF vectorisation -----------------------------------------
-    print("Fitting TF-IDF vectorizer …")
-    vec = make_vectorizer()
-    X_train_tfidf = vec.fit_transform(X_train)
-    X_val_tfidf = vec.transform(X_val)
-    X_test_tfidf = vec.transform(X_test)
-    print(f"TF-IDF features: {X_train_tfidf.shape[1]:,}")
+    # --- Sentence-transformer embeddings ------------------------------
+    print(f"Loading SentenceTransformer '{s.layer_c_embedding_model}' …")
+    encoder = SentenceTransformer(s.layer_c_embedding_model)
+    emb_dim = encoder.get_sentence_embedding_dimension()
 
-    # --- Dimensionality reduction ------------------------------------
-    n_components = min(_settings.layer_c_svd_components, X_train_tfidf.shape[1] - 1, X_train_tfidf.shape[0] - 1)
-    print(f"Fitting TruncatedSVD ({n_components} components) …")
-    reducer = make_reducer(n_components=n_components)
-    X_train_vec = reducer.fit_transform(X_train_tfidf)
-    X_val_vec = reducer.transform(X_val_tfidf)
-    X_test_vec = reducer.transform(X_test_tfidf)
+    print("Encoding training texts …")
+    X_train_emb = encode_texts(X_train, encoder)
+    print("Encoding validation texts …")
+    X_val_emb = encode_texts(X_val, encoder)
+    print("Encoding test texts …")
+    X_test_emb = encode_texts(X_test, encoder)
+    print(f"Embedding features: {emb_dim}")
 
-    explained_var = float(np.sum(reducer.explained_variance_ratio_))
-    print(f"SVD: {X_train_tfidf.shape[1]:,} features → {n_components} components "
-          f"({explained_var:.2%} variance explained)")
+    X_train_features = X_train_emb
+    X_val_features = X_val_emb
+    X_test_features = X_test_emb
+    print(f"Total features for XGBoost: {X_train_features.shape[1]:,}")
 
     # --- XGBoost ---
     n_pos = int(np.sum(y_train == 1))
@@ -341,16 +328,23 @@ def train_eval(X, y, low=None, high=None):
     model = make_model(n_pos, n_neg)
     print("Training XGBoost …")
     model.fit(
-        X_train_vec, y_train,
-        eval_set=[(X_val_vec, y_val)],
+        X_train_features, y_train,
+        eval_set=[(X_val_features, y_val)],
         verbose=50,
     )
     best_iteration = getattr(model, "best_iteration", None)
     if best_iteration is not None:
         print(f"Early stopping: best iteration = {best_iteration}")
 
-    val_scores = model.predict_proba(X_val_vec)[:, 1]
-    test_scores = model.predict_proba(X_test_vec)[:, 1]
+    # probability calibration
+    print("Calibrating probabilities …")
+    calibrated_model = CalibratedClassifierCV(
+        model, cv="prefit", method="sigmoid"
+    )
+    calibrated_model.fit(X_val_features, y_val)
+
+    val_scores = calibrated_model.predict_proba(X_val_features)[:, 1]
+    test_scores = calibrated_model.predict_proba(X_test_features)[:, 1]
     val_pred_05 = val_scores >= 0.5
     test_pred_05 = test_scores >= 0.5
 
@@ -368,18 +362,14 @@ def train_eval(X, y, low=None, high=None):
     test_verdict_counts = pd.Series(test_verdict).value_counts().to_dict()
 
     return {
-        "vectorizer": vec,
-        "reducer": reducer,
-        "model": model,
+        "model": calibrated_model,
+        "embedding_model": s.layer_c_embedding_model,
         "thresholds": {
             "low": float(low),
             "high": float(high),
             "tuning": (None if tuned is None else tuned),
         },
-        "pca": {
-            "n_components": n_components,
-            "explained_variance": explained_var,
-        },
+        "embedding_info": {"model": s.layer_c_embedding_model, "dim": emb_dim},
         "metrics": {
             "val": {
                 "roc_auc": float(roc_auc_score(y_val, val_scores)),

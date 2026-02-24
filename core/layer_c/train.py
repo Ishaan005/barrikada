@@ -1,6 +1,6 @@
 """Small training script for Layer C (Tier-2 ML).
 
-Pipeline: TF-IDF (word + char) → PCA (TruncatedSVD) → XGBoost.
+Pipeline: SentenceTransformer embeddings + meta-features → XGBoost.
 Saves artifacts + prints metrics + writes evaluation report.
 """
 
@@ -26,16 +26,6 @@ def main():
         help="Path to training CSV (columns: text,label)",
     )
     parser.add_argument(
-        "--vectorizer-out",
-        default=settings.vectorizer_path,
-        help="Path to write vectorizer artifact (.joblib)",
-    )
-    parser.add_argument(
-        "--pca-out",
-        default=settings.reducer_path,
-        help="Path to write PCA reducer artifact (.joblib)",
-    )
-    parser.add_argument(
         "--model-out",
         default=settings.model_path,
         help="Path to write model artifact (.joblib)",
@@ -57,18 +47,16 @@ def main():
     X, y, df = load_data(args.csv, use_cache=not args.no_cache)
     out = train_eval(X, y)
 
-    vec = out["vectorizer"]
-    reducer = out["reducer"]
     model = out["model"]
     thresholds = out["thresholds"]
     metrics = out["metrics"]
-    pca_info = out["pca"]
+    emb_info = out["embedding_info"]
 
-    save(vec, reducer, model, args.vectorizer_out, args.pca_out, args.model_out)
+    save(model, args.model_out)
     write_json(args.report_out, {
         "thresholds": thresholds,
         "metrics": metrics,
-        "pca": pca_info,
+        "embedding_info": emb_info,
     })
 
     # Console output for quick feedback
@@ -78,13 +66,15 @@ def main():
         "Routing thresholds: "
         f"low={thresholds['low']:.4f}, high={thresholds['high']:.4f} "
     )
-    print(
-            "VAL policy metrics: "
-            f"block_precision={tuning.get('val_block_precision')}, "
-            f"block_recall={tuning.get('val_block_recall')}, "
-            f"malicious_allow_rate={tuning.get('val_malicious_allow_rate')}, "
-            f"allow_rate={tuning.get('val_allow_rate')}"
-    )
+    if tuning:
+        print(
+                "VAL policy metrics: "
+                f"block_precision={tuning.get('val_block_precision')}, "
+                f"block_recall={tuning.get('val_block_recall')}, "
+                f"malicious_allow_rate={tuning.get('val_malicious_allow_rate')}, "
+                f"safe_fpr={tuning.get('val_safe_fpr')}, "
+                f"allow_rate={tuning.get('val_allow_rate')}"
+        )
     print("VAL (threshold=0.5):\n" + metrics["val"]["report_0.5"])
     print("VAL (routing thresholds):\n" + metrics["val"]["report_routing"])
     print(f"VAL verdict counts: {metrics['val']['routing_verdict_counts']}")

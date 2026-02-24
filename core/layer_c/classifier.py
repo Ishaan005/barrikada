@@ -1,9 +1,11 @@
 import time
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 import joblib
 import numpy as np
+from sentence_transformers import SentenceTransformer
+
 from models.LayerCResult import LayerCResult
 
 
@@ -22,14 +24,12 @@ class Thresholds:
 class Classifier:
     def __init__(
         self,
-        vectorizer_path: str,
         model_path: str,
-        reducer_path: Optional[str] = None,
-        low= 0.35,
-        high= 0.85,
+        embedding_model: str = "all-mpnet-base-v2",
+        low: float = 0.35,
+        high: float = 0.85,
     ):
-        self.vectorizer = joblib.load(vectorizer_path)
-        self.reducer = joblib.load(reducer_path) if reducer_path else None
+        self.encoder = SentenceTransformer(embedding_model)
         self.model = joblib.load(model_path)
 
         self.thresholds = Thresholds(low=low, high=high)
@@ -38,9 +38,8 @@ class Classifier:
     def predict(self, input_text: str) -> LayerCResult:
         start_time = time.time()
 
-        X = self.vectorizer.transform([input_text])
-        if self.reducer is not None:
-            X = self.reducer.transform(X)
+        emb = self.encoder.encode([input_text], normalize_embeddings=True)
+        X = emb
         probability_score = self.model.predict_proba(X)[:, 1][0]
 
         if probability_score < self.thresholds.low:
@@ -73,6 +72,11 @@ class Classifier:
         res = self.predict(input_text)
         return {"score": res.probability_score, "decision": res.verdict}
 
+    def predict_batch(self, texts: List[str]) -> np.ndarray:
+        """Return raw probability scores for a batch of texts."""
+        embs = self.encoder.encode(texts, normalize_embeddings=True, show_progress_bar=False)
+        return self.model.predict_proba(embs)[:, 1]
+
     def grid_search(
         self,
         texts: List[str],
@@ -81,12 +85,8 @@ class Classifier:
         high_range: Tuple[float, float, float] = (0.5, 0.95, 0.05),
         optimize_for: str = "f1",
     ):
-        # Pre-compute all probabilities once
-        X_vec = self.vectorizer.transform(texts)
-        if self.reducer is not None:
-            X_vec = self.reducer.transform(X_vec)
-        probs = self.model.predict_proba(X_vec)[:, 1]
-        labels = np.array(labels) #type:ignore
+        probs = self.predict_batch(texts)
+        labels_arr = np.array(labels)
         
         low_vals = np.arange(*low_range)
         high_vals = np.arange(*high_range)
@@ -100,12 +100,11 @@ class Classifier:
                 if low >= high:
                     continue
                     
-                # Predict: flag/block (prob >= low) counts as detection
                 preds = (probs >= low).astype(int)
                 
-                tp = ((preds == 1) & (labels == 1)).sum()
-                fp = ((preds == 1) & (labels == 0)).sum()
-                fn = ((preds == 0) & (labels == 1)).sum()
+                tp = ((preds == 1) & (labels_arr == 1)).sum()
+                fp = ((preds == 1) & (labels_arr == 0)).sum()
+                fn = ((preds == 0) & (labels_arr == 1)).sum()
                 
                 precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
                 recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
