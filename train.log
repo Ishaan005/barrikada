@@ -1,0 +1,122 @@
+[cache] Loading pre-filtered data from filtered_51b5c3fbefa084a49fa551d7119a73f6.parquet
+Loading SentenceTransformer 'all-mpnet-base-v2' …
+Encoding training texts …
+Encoding validation texts …
+Encoding test texts …
+Embedding features: 768
+Training XGBoost …
+[0]	validation_0-aucpr:0.70751
+[50]	validation_0-aucpr:0.90622
+[100]	validation_0-aucpr:0.92949
+[150]	validation_0-aucpr:0.94169
+[200]	validation_0-aucpr:0.94870
+[250]	validation_0-aucpr:0.95319
+[300]	validation_0-aucpr:0.95655
+[350]	validation_0-aucpr:0.95918
+[400]	validation_0-aucpr:0.96108
+[450]	validation_0-aucpr:0.96256
+[500]	validation_0-aucpr:0.96390
+[550]	validation_0-aucpr:0.96500
+[600]	validation_0-aucpr:0.96602
+[650]	validation_0-aucpr:0.96697
+[700]	validation_0-aucpr:0.96776
+[750]	validation_0-aucpr:0.96838
+[800]	validation_0-aucpr:0.96895
+[850]	validation_0-aucpr:0.96953
+[900]	validation_0-aucpr:0.96995
+[950]	validation_0-aucpr:0.97044
+[1000]	validation_0-aucpr:0.97085
+[1050]	validation_0-aucpr:0.97120
+[1100]	validation_0-aucpr:0.97155
+[1150]	validation_0-aucpr:0.97181
+[1200]	validation_0-aucpr:0.97216
+[1250]	validation_0-aucpr:0.97236
+[1300]	validation_0-aucpr:0.97251
+[1350]	validation_0-aucpr:0.97273
+[1400]	validation_0-aucpr:0.97294
+[1450]	validation_0-aucpr:0.97313
+[1500]	validation_0-aucpr:0.97334
+[1550]	validation_0-aucpr:0.97349
+[1600]	validation_0-aucpr:0.97373
+[1650]	validation_0-aucpr:0.97387
+[1700]	validation_0-aucpr:0.97402
+[1750]	validation_0-aucpr:0.97415
+[1800]	validation_0-aucpr:0.97431
+[1850]	validation_0-aucpr:0.97445
+[1900]	validation_0-aucpr:0.97458
+[1950]	validation_0-aucpr:0.97470
+[2000]	validation_0-aucpr:0.97476
+[2050]	validation_0-aucpr:0.97491
+[2100]	validation_0-aucpr:0.97502
+[2150]	validation_0-aucpr:0.97511
+[2200]	validation_0-aucpr:0.97520
+[2250]	validation_0-aucpr:0.97531
+[2300]	validation_0-aucpr:0.97539
+[2350]	validation_0-aucpr:0.97551
+[2400]	validation_0-aucpr:0.97555
+[2450]	validation_0-aucpr:0.97565
+[2500]	validation_0-aucpr:0.97573
+[2550]	validation_0-aucpr:0.97581
+[2600]	validation_0-aucpr:0.97587
+[2650]	validation_0-aucpr:0.97595
+[2700]	validation_0-aucpr:0.97604
+[2750]	validation_0-aucpr:0.97608
+[2800]	validation_0-aucpr:0.97612
+[2850]	validation_0-aucpr:0.97618
+[2900]	validation_0-aucpr:0.97625
+[2950]	validation_0-aucpr:0.97629
+[2999]	validation_0-aucpr:0.97635
+Early stopping: best iteration = 2998
+Calibrating probabilities …
+Tuning routing thresholds …
+[tune] grid checked=39725  fail_block_prec(>=0.90)=0  fail_mal_allow(<=0.05)=21925  fail_safe_fpr(<=0.10)=17800  -> NO solution — falling back to defaults
+
+=== Layer C (Tier-2) Evaluation ===
+Routing thresholds: low=0.2500, high=0.7500 
+VAL policy metrics: block_precision=0.0, block_recall=0.0, malicious_allow_rate=0.0, safe_fpr=None, allow_rate=0.0
+VAL (threshold=0.5):
+              precision    recall  f1-score   support
+
+           0     0.9289    0.9404    0.9346     11842
+           1     0.9236    0.9091    0.9163      9383
+
+    accuracy                         0.9265     21225
+   macro avg     0.9262    0.9247    0.9254     21225
+weighted avg     0.9265    0.9265    0.9265     21225
+
+VAL (routing thresholds):
+              precision    recall  f1-score   support
+
+           0     0.9669    0.8706    0.9162     11842
+           1     0.8550    0.9624    0.9055      9383
+
+    accuracy                         0.9112     21225
+   macro avg     0.9109    0.9165    0.9109     21225
+weighted avg     0.9174    0.9112    0.9115     21225
+
+VAL verdict counts: {'allow': 10663, 'block': 8237, 'flag': 2325}
+
+TEST (threshold=0.5):
+              precision    recall  f1-score   support
+
+           0     0.9286    0.9435    0.9360     11842
+           1     0.9272    0.9085    0.9178      9384
+
+    accuracy                         0.9280     21226
+   macro avg     0.9279    0.9260    0.9269     21226
+weighted avg     0.9280    0.9280    0.9279     21226
+
+TEST (routing thresholds):
+              precision    recall  f1-score   support
+
+           0     0.9630    0.8785    0.9188     11842
+           1     0.8619    0.9574    0.9072      9384
+
+    accuracy                         0.9134     21226
+   macro avg     0.9125    0.9179    0.9130     21226
+weighted avg     0.9183    0.9134    0.9136     21226
+
+TEST verdict counts: {'allow': 10803, 'block': 8230, 'flag': 2193}
+VAL ROC-AUC: 0.9803
+TEST ROC-AUC: 0.9800
+Rows used: 141503

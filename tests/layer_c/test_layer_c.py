@@ -137,7 +137,7 @@ def test_layer_c():
     # Filter through Layer A and B
     flagged_texts, flagged_labels = filter_through_layer_b(test_texts, true_labels)
     
-    # Load thresholds from training report (not hardcoded)
+    # Load thresholds from training report 
     low, high = load_trained_thresholds()
     
     classifier = Classifier(

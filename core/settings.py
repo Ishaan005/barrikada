@@ -43,35 +43,26 @@ class Settings(BaseModel):
     layer_c_embedding_model: str = "all-mpnet-base-v2"
     layer_c_embedding_batch_size: int = 128
 
-    layer_c_xgb_n_estimators: int = 2000
-    layer_c_xgb_max_depth: int = 7
-    layer_c_xgb_learning_rate: float = 0.05
-    layer_c_xgb_subsample: float = 0.8
-    layer_c_xgb_colsample_bytree: float = 0.9
-    layer_c_xgb_early_stopping_rounds: int = 80
-    layer_c_xgb_tree_method: str = "hist"
-    layer_c_xgb_reg_alpha: float = 0.1      # L1 regularization
-    layer_c_xgb_reg_lambda: float = 1.0     # L2 regularization
-    layer_c_xgb_min_child_weight: int = 5   # min samples per leaf
-    layer_c_xgb_gamma: float = 0.1          # min split gain
+    # Probability calibration
+    layer_c_calibration_method: str = "isotonic"
 
     # Threshold tuning constraints
-    layer_c_tune_target_block_precision: float = 0.99
-    layer_c_tune_max_malicious_allow_rate: float = 0.05
-    layer_c_tune_max_safe_fpr: float = 0.10          # max 10% of safe texts flagged+blocked
+    layer_c_tune_target_block_precision: float = 0.90
+    layer_c_tune_max_malicious_allow_rate: float = 0.05  # hard cap: malicious texts reaching allow
+    layer_c_tune_max_safe_fpr: float = 0.10          # hard cap: safe texts flagged or blocked
     layer_c_tune_min_flag_band: float = 0.05
 
     # Threshold grid search
-    layer_c_tune_low_grid_start: float = 0.25
-    layer_c_tune_low_grid_end: float = 0.60
-    layer_c_tune_high_grid_start: float = 0.55
+    layer_c_tune_low_grid_start: float = 0.10
+    layer_c_tune_low_grid_end: float = 0.50
+    layer_c_tune_high_grid_start: float = 0.50
     layer_c_tune_high_grid_end: float = 0.99
     layer_c_tune_grid_steps: int = 200
 
-    # Composite score weights for threshold selection
-    layer_c_tune_w_block_recall: float = 0.4
-    layer_c_tune_w_allow_rate: float = 0.3
-    layer_c_tune_w_flag_rate: float = 0.3
+    # Composite score weights — objective: maximise block_recall, penalise FN (mal→allow) and FP (safe→flag/block)
+    layer_c_tune_w_block_recall: float = 0.5       # reward: malicious texts that are blocked
+    layer_c_tune_w_mal_allow_penalty: float = 0.4  # penalty: malicious texts reaching allow (false negatives)
+    layer_c_tune_w_safe_fpr_penalty: float = 0.3   # penalty: safe texts flagged or blocked (false positives)
 
     @property
     def dataset_path(self) -> str:
@@ -80,8 +71,4 @@ class Settings(BaseModel):
     @property
     def model_path(self) -> str:
         return str(self._project_root / "core/layer_c" / "outputs" / "classifier.joblib")
-
-    @property
-    def meta_features_path(self) -> str:
-        return str(self._project_root / "core/layer_c" / "outputs" / "meta_features.joblib")
 

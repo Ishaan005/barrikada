@@ -1,9 +1,3 @@
-"""Small training script for Layer C (Tier-2 ML).
-
-Pipeline: SentenceTransformer embeddings + meta-features → XGBoost.
-Saves artifacts + prints metrics + writes evaluation report.
-"""
-
 import argparse
 import sys
 from pathlib import Path
@@ -14,7 +8,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.settings import Settings
-from core.layer_c.training_utils import load_data, save, train_eval, write_json
+from core.layer_c.train.load_data import load_data
+from core.layer_c.train.utils import save, write_json
+from core.layer_c.train.train_eval import train_eval
 
 def main():
     settings = Settings()
@@ -43,7 +39,7 @@ def main():
 
     args = parser.parse_args()
 
-    # Default behavior: train only on samples that would reach Layer C.
+    #train only on samples that would reach Layer C.
     X, y, df = load_data(args.csv, use_cache=not args.no_cache)
     out = train_eval(X, y)
 
@@ -59,8 +55,8 @@ def main():
         "embedding_info": emb_info,
     })
 
-    # Console output for quick feedback
-    print("\n=== Layer C (Tier-2) Evaluation ===")
+    #console output
+    print("\n=== Layer C Evaluation ===")
     tuning = thresholds.get("tuning")
     print(
         "Routing thresholds: "

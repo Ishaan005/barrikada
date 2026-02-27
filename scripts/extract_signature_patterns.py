@@ -20,6 +20,7 @@ from pathlib import Path
 
 import numpy as np
 from scipy.sparse import csr_matrix
+from sklearn.model_selection import train_test_split
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -36,12 +37,6 @@ log = logging.getLogger(__name__)
 
 DATASET_CSV = Path("datasets/barrikada.csv")
 OUTDIR      = Path("core/layer_b/signatures/extracted")
-
-# ---------------------------------------------------------------------------
-# Backwards-compatibility re-exports (tests / notebooks may import these)
-# ---------------------------------------------------------------------------
-from core.layer_b.extraction.thresholds  import compute_thresholds as _compute_thresholds  # noqa: F401
-
 
 # ---------------------------------------------------------------------------
 # Main pipeline
@@ -63,8 +58,6 @@ def main() -> None:
     log.info("Loaded %d samples (safe=%d, malicious=%d)", n_total, n_safe, n_mal)
 
     # --- Stratified split: 80% extract, 20% holdout for validation ---
-    from sklearn.model_selection import train_test_split
-
     idx_extract, idx_holdout = train_test_split(
         np.arange(n_total), test_size=0.20, random_state=42, stratify=labels,
     )

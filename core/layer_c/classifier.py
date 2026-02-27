@@ -1,7 +1,8 @@
 import time
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 
+import torch
 import joblib
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -29,7 +30,8 @@ class Classifier:
         low: float = 0.35,
         high: float = 0.85,
     ):
-        self.encoder = SentenceTransformer(embedding_model)
+        _device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.encoder = SentenceTransformer(embedding_model, device=_device)
         self.model = joblib.load(model_path)
 
         self.thresholds = Thresholds(low=low, high=high)
@@ -76,50 +78,3 @@ class Classifier:
         """Return raw probability scores for a batch of texts."""
         embs = self.encoder.encode(texts, normalize_embeddings=True, show_progress_bar=False)
         return self.model.predict_proba(embs)[:, 1]
-
-    def grid_search(
-        self,
-        texts: List[str],
-        labels: List[int],
-        low_range: Tuple[float, float, float] = (0.1, 0.5, 0.05),
-        high_range: Tuple[float, float, float] = (0.5, 0.95, 0.05),
-        optimize_for: str = "f1",
-    ):
-        probs = self.predict_batch(texts)
-        labels_arr = np.array(labels)
-        
-        low_vals = np.arange(*low_range)
-        high_vals = np.arange(*high_range)
-        
-        best_score = -1.0
-        best_thresholds = (0.35, 0.85)
-        best_metrics = {}
-        
-        for low in low_vals:
-            for high in high_vals:
-                if low >= high:
-                    continue
-                    
-                preds = (probs >= low).astype(int)
-                
-                tp = ((preds == 1) & (labels_arr == 1)).sum()
-                fp = ((preds == 1) & (labels_arr == 0)).sum()
-                fn = ((preds == 0) & (labels_arr == 1)).sum()
-                
-                precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-                f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-                
-                score = {"f1": f1, "recall": recall, "precision": precision}[optimize_for]
-                
-                if score > best_score:
-                    best_score = score
-                    best_thresholds = (low, high)
-                    best_metrics = {"precision": precision, "recall": recall, "f1": f1}
-        
-        return {
-            "best_low": best_thresholds[0],
-            "best_high": best_thresholds[1],
-            "optimized_for": optimize_for,
-            **best_metrics,
-        }
