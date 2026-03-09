@@ -1,67 +1,81 @@
 """SAFE allow-signature extraction for Layer B."""
 import logging
 import time
-from typing import Dict, List
 
 import numpy as np
 
 from models.PatternStats import PatternStats
-from core.layer_b.extraction.vectorise import is_stopwordy_ngram
+from core.layer_b.extraction.vectorise import (
+    compute_statistical_quality_thresholds,
+    passes_statistical_quality_filter,
+)
 
 log = logging.getLogger(__name__)
 
-# Minimum ratio of safe hits to total hits for an allow-signature.
-SAFE_ALLOW_PRECISION_THRESHOLD = 0.98
 
+def build_safe_signatures(thresholds, w_vocab, w_safe_df, w_mal_df):
+    """Build a list of high-precision safe allow-signature dicts.
 
-def build_safe_signatures(
-    thresholds: Dict[str, int],
-    w_vocab: np.ndarray,
-    w_safe_df: np.ndarray,
-    w_mal_df: np.ndarray,
-):
-    """Return a list of high-precision SAFE allow-signature dicts.
-
-    Signatures enable early termination for clearly safe prompts, avoiding
-    unnecessary compute in downstream ML layers.  Rules must be:
-      - common in safe prompts  (>= safe_min_support hits)
-      - extremely rare in malicious prompts (<= safe_mal_df_cap hits)
-      - above the precision threshold
+    Only uses word n-grams (no char n-grams needed for safe sigs —
+    safe patterns tend to be full phrases, not fragments).
     """
     t0 = time.perf_counter()
 
-    safe_min_support = thresholds["safe_min_support"]
-    safe_mal_df_cap  = thresholds["safe_mal_df_cap"]
-    safe_top_k       = thresholds["safe_top_k"]
+    safe_min_support    = thresholds["safe_min_support"]
+    safe_mal_df_cap     = thresholds["safe_mal_df_cap"]
+    precision_threshold = thresholds["safe_precision_threshold"]
 
-    # Vectorised pre-filter before the Python loop
+    # Fast pre-filter with numpy
     mask = (w_safe_df >= safe_min_support) & (w_mal_df <= safe_mal_df_cap)
-    idxs = np.nonzero(mask)[0]
-    log.info("  %d / %d features pass support & DF-cap pre-filter", len(idxs), len(w_vocab))
+    passing_indices = np.nonzero(mask)[0]
+    log.info("  %d / %d features pass support & DF-cap pre-filter", len(passing_indices), len(w_vocab))
 
-    candidates: List[PatternStats] = []
-    for i in idxs:
+    #Statistical quality filter 
+    candidate_patterns = [str(w_vocab[i]) for i in passing_indices]
+    candidate_supports = np.asarray([int(w_safe_df[i]) for i in passing_indices], dtype=np.int32)
+    quality_thresholds = compute_statistical_quality_thresholds(
+        candidate_patterns, candidate_supports, role="safe",
+    )
+    log.info("  SAFE quality thresholds: %s", quality_thresholds)
+
+    candidates = []
+    filtered_count = 0
+    for i in passing_indices:
         pattern = str(w_vocab[i])
-        s_df    = int(w_safe_df[i])
-        m_df    = int(w_mal_df[i])
+        safe_df = int(w_safe_df[i])
+        mal_df = int(w_mal_df[i])
 
-        if is_stopwordy_ngram(pattern):
-            continue
-        precision = s_df / (s_df + m_df) if (s_df + m_df) else 0.0
-        if precision < SAFE_ALLOW_PRECISION_THRESHOLD:
+        if not passes_statistical_quality_filter(pattern, safe_df, quality_thresholds, role="safe"):
+            filtered_count += 1
             continue
 
-        candidates.append(PatternStats(pattern, s_df, m_df))
+        precision = safe_df / (safe_df + mal_df) if (safe_df + mal_df) else 0.0
+        if precision < precision_threshold:
+            continue
 
-    candidates.sort(key=lambda x: (x.safe_precision, x.safe_df, -len(x.pattern)), reverse=True)
-    candidates = candidates[:safe_top_k]
+        candidates.append(PatternStats(pattern, safe_df, mal_df))
 
+    log.info("  SAFE statistical filter removed %d candidates", filtered_count)
+
+    # Sort by: precision (highest first), then support-per-token (favour concise
+    # patterns), then raw support, then shortest pattern wins ties
+    candidates.sort(
+        key=lambda c: (
+            c.safe_precision,
+            c.safe_df / max(1, len(c.pattern.split())),
+            c.safe_df,
+            -len(c.pattern),
+        ),
+        reverse=True,
+    )
+
+    # Build output dicts
     out = [
         {
             "pattern":           c.pattern,
             "support":           c.safe_df,
             "malicious_support": c.mal_df,
-            "safe_precision":    float(round(c.safe_precision, 4)),
+            "safe_precision":    round(c.safe_precision, 4),
             "type":              "allow-safe",
         }
         for c in candidates

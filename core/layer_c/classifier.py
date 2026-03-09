@@ -37,7 +37,7 @@ class Classifier:
         self.thresholds = Thresholds(low=low, high=high)
         self.thresholds.validate()
 
-    def predict(self, input_text: str) -> LayerCResult:
+    def predict(self, input_text) -> LayerCResult:
         start_time = time.time()
 
         emb = self.encoder.encode([input_text], normalize_embeddings=True)
@@ -74,7 +74,7 @@ class Classifier:
         res = self.predict(input_text)
         return {"score": res.probability_score, "decision": res.verdict}
 
-    def predict_batch(self, texts: List[str]) -> np.ndarray:
+    def predict_batch(self, texts):
         """Return raw probability scores for a batch of texts."""
         embs = self.encoder.encode(texts, normalize_embeddings=True, show_progress_bar=False)
         return self.model.predict_proba(embs)[:, 1]

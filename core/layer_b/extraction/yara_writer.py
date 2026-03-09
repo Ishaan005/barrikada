@@ -1,11 +1,18 @@
-"""YARA rule rendering and file writing for signature extraction."""
+"""Write extracted signatures as YARA rule files.
+
+Each signature dict gets turned into a YARA rule with:
+  - A regex string ($re) for word n-grams (matched with word boundaries)
+  - A literal string ($s) for everything else (char n-gram fragments)
+  - Metadata: the original pattern text, precision, support, etc.
+"""
 import hashlib
 import re
 from pathlib import Path
-from typing import Any, List, Tuple
 
 
-def _yara_escape_str_literal(s: str):
+# ── String escaping & formatting helpers ─────────────────────────────────
+
+def _escape_for_yara(s):
     """Escape a string for use inside a YARA double-quoted literal."""
     s = s.replace("\\", r"\\")
     s = s.replace('"', r'\"')
@@ -15,31 +22,33 @@ def _yara_escape_str_literal(s: str):
     return s
 
 
-def _yara_word_ngram_regex(pattern: str):
-    """Build a word-boundary regex for a whitespace-separated n-gram."""
+def _build_word_boundary_regex(pattern):
+    """Turn a whitespace-separated n-gram into a YARA regex with word boundaries."""
     tokens = pattern.split()
     body = "\\s+".join(re.escape(t) for t in tokens)
     return f"(^|\\s){body}(\\s|$)"
 
 
-def _pattern_to_yara_string(pattern: str):
-    """Return (identifier, yara_string_declaration).
+def _pattern_to_yara_string(pattern):
+    """Convert a pattern into a YARA string declaration.
 
-    - Word n-grams (1–4 tokens, all alphanumeric): whitespace-bounded regex.
-    - Everything else: plain double-quoted literal.
+    Returns (identifier, declaration) where:
+      - Word n-grams (2-5 alphanumeric tokens) become regex with word boundaries ($re)
+      - Everything else becomes a plain literal match ($s)
     """
     tokens = pattern.split()
-    if 1 <= len(tokens) <= 4 and all(tok.isalnum() for tok in tokens):
-        regex = _yara_word_ngram_regex(pattern)
+    if 2 <= len(tokens) <= 5 and all(tok.isalnum() for tok in tokens):
+        regex = _build_word_boundary_regex(pattern)
         return "$re", f"$re = /{regex}/ nocase"
-    lit = _yara_escape_str_literal(pattern)
-    return "$s", f'$s = "{lit}" nocase'
+    escaped = _escape_for_yara(pattern)
+    return "$s", f'$s = "{escaped}" nocase'
 
 
-def _yara_meta_value(v: Any):
-    """Render a value as a YARA meta literal.
+def _format_meta_value(v):
+    """Format a Python value as a YARA meta literal.
 
-    YARA supports integers and quoted strings; floats are stored as strings.
+    YARA meta only supports integers and quoted strings, so floats
+    get stored as strings (e.g. precision "0.998").
     """
     if isinstance(v, bool):
         return str(v).lower()
@@ -47,49 +56,70 @@ def _yara_meta_value(v: Any):
         return str(v)
     if isinstance(v, float):
         return f'"{v}"'
-    return f'"{_yara_escape_str_literal(str(v))}"'
+    return f'"{_escape_for_yara(str(v))}"'
 
 
-def _pattern_digest(pattern: str):
-    """Return a short deterministic hex ID for *pattern*."""
+def _pattern_digest(pattern):
+    """Return a short hex digest of a pattern for use in rule names."""
     h = hashlib.blake2b(pattern.encode("utf-8"), digest_size=6)
     return h.hexdigest()
 
 
-def _render_rule(
-    rule_name: str,
-    tags: List[str],
-    pattern: str,
-    ident: str,
-    decl: str,
-    meta: List[Tuple[str, Any]],
-):
+# ── Rule rendering ───────────────────────────────────────────────────────
+
+def _render_rule(rule_name, tags, pattern, identifier, declaration, meta):
+    """Build a single YARA rule as a string."""
     tag_str = f" : {' '.join(tags)}" if tags else ""
+    escaped_pattern = _escape_for_yara(pattern)
+
     lines = [
         f"rule {rule_name}{tag_str} {{",
         "    meta:",
-        f'        pattern = "{_yara_escape_str_literal(pattern)}"',
+        f'        pattern = "{escaped_pattern}"',
     ]
-    for k, v in meta:
-        lines.append(f"        {k} = {_yara_meta_value(v)}")
+    for key, value in meta:
+        lines.append(f"        {key} = {_format_meta_value(value)}")
     lines += [
         "    strings:",
-        f"        {decl}",
+        f"        {declaration}",
         "    condition:",
-        f"        {ident}",
+        f"        {identifier}",
         "}",
     ]
     return "\n".join(lines)
 
 
-def write_yara_rules(
-    out_path: Path,
-    rule_prefix: str,
-    signatures: List[dict],
-    meta_keys: List[str],
-):
-    """Render signatures as YARA rules and write to out_path."""
-    lines: List[str] = [
+# Main writer 
+
+def write_yara_rules(out_path, rule_prefix, signatures, meta_keys):
+    """Render signatures as YARA rules and write them to a file.
+
+    Duplicate patterns are collapsed — when the same pattern text appears
+    more than once, only the entry with the highest precision (then highest
+    support) is kept.
+    """
+    # Deduplicate by pattern text, keeping the best entry
+    best_by_pattern = {}
+    for sig in signatures:
+        pattern = str(sig.get("pattern", "")).strip()
+        if not pattern:
+            continue
+
+        prev = best_by_pattern.get(pattern)
+        if prev is None:
+            best_by_pattern[pattern] = sig
+        else:
+            new_prec = float(sig.get("precision", sig.get("safe_precision", 0)))
+            old_prec = float(prev.get("precision", prev.get("safe_precision", 0)))
+            new_sup = int(sig.get("support", 0))
+            old_sup = int(prev.get("support", 0))
+            if (new_prec, new_sup) > (old_prec, old_sup):
+                best_by_pattern[pattern] = sig
+
+    deduped = list(best_by_pattern.values())
+
+    # Build the output file
+    lines = [
         "/*",
         "  AUTO-GENERATED FILE",
         "  Generated by: scripts/extract_signature_patterns.py",
@@ -97,24 +127,17 @@ def write_yara_rules(
         "*/",
         "",
     ]
-    for idx, sig in enumerate(signatures, start=1):
+    for idx, sig in enumerate(deduped, start=1):
         pattern = str(sig["pattern"]).strip()
         if not pattern:
             continue
-        digest    = _pattern_digest(pattern)
+
+        digest = _pattern_digest(pattern)
         rule_name = f"{rule_prefix}{digest}_{idx:04d}"
-        ident, decl = _pattern_to_yara_string(pattern)
+        identifier, declaration = _pattern_to_yara_string(pattern)
         meta = [(k, sig[k]) for k in meta_keys if k in sig]
-        lines.append(
-            _render_rule(
-                rule_name=rule_name,
-                tags=["extracted"],
-                pattern=pattern,
-                ident=ident,
-                decl=decl,
-                meta=meta,
-            )
-        )
+
+        lines.append(_render_rule(rule_name, ["extracted"], pattern, identifier, declaration, meta))
         lines.append("")
 
     out_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
