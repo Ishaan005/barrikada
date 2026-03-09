@@ -59,19 +59,19 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--llm-max-safe",
         type=int,
-        default=60,
+        default=500,
         help="Maximum number of SAFE signatures to review with the LLM",
     )
     parser.add_argument(
         "--llm-max-malicious",
         type=int,
-        default=90,
+        default=1500,
         help="Maximum number of MALICIOUS signatures to review with the LLM",
     )
     parser.add_argument(
         "--llm-batch-size",
         type=int,
-        default=15,
+        default=20,
         help="Batch size for LLM signature review",
     )
     return parser.parse_args()

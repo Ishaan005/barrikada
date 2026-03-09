@@ -1,9 +1,4 @@
-"""Bounded Ollama-assisted signature filtering.
-
-The statistical pipeline remains primary. This module only reviews a small,
-high-impact subset of signatures after extraction and can drop obvious
-artifacts that survive numeric filters.
-"""
+"""Ollama-assisted signature filtering."""
 
 from __future__ import annotations
 
@@ -27,44 +22,66 @@ def _quantile(values: Sequence[float], q: float, default: float) -> float:
     return float(np.quantile(np.asarray(values, dtype=float), q))
 
 
-def _review_score(signature: dict, role: str, support_floor: float) -> float:
+def _suspicion_score(signature: dict, role: str) -> float:
+    """Higher score = more likely to be an artifact that needs review."""
     pattern = str(signature.get("pattern", ""))
-    support = float(signature.get("support", 0))
     stats = pattern_shape_stats(pattern)
 
-    score = support
-    if support >= support_floor:
-        score += support * 0.30
-    if stats["token_count"] >= 5:
-        score += support * 0.25
-    if stats["capitalized_token_ratio"] > 0.4:
-        score += support * 0.20
-    if stats["punct_ratio"] > 0.10:
-        score += support * 0.15
+    score = 0.0
+    # Low alpha ratio → likely contains formatting junk
+    if stats["alpha_ratio"] < 0.85:
+        score += (0.85 - stats["alpha_ratio"]) * 5.0
+    # High punctuation → template/formatting artifact
+    if stats["punct_ratio"] > 0.05:
+        score += stats["punct_ratio"] * 4.0
+    # Edge punctuation → wrapping artifact
     if stats["edge_punct_count"] > 0:
-        score += support * 0.10
-    if role == "malicious" and stats["stopword_ratio"] > 0.6:
-        score += support * 0.10
+        score += stats["edge_punct_count"] * 1.5
+    # High capitalization → named entities or headers
+    if stats["capitalized_token_ratio"] > 0.3:
+        score += stats["capitalized_token_ratio"] * 3.0
+    # High stopword ratio → generic filler
+    if stats["stopword_ratio"] > 0.5:
+        score += stats["stopword_ratio"] * 2.0
+    # Low unique token ratio → repetitive pattern
+    if stats["unique_token_ratio"] < 0.8:
+        score += (1.0 - stats["unique_token_ratio"]) * 2.0
+    # Short mean token length → likely fragments
+    if stats["mean_token_len"] < 3.5:
+        score += (3.5 - stats["mean_token_len"]) * 1.0
+    # High digit ratio → data/benchmark artifact
+    if stats["digit_ratio"] > 0.0:
+        score += stats["digit_ratio"] * 3.0
+    # Low support → more likely to be noise
+    support = float(signature.get("support", 0))
+    if support < 50:
+        score += (50 - support) * 0.02
+    # Role-specific: malicious sigs with high safe support are suspect
+    if role == "malicious":
+        safe_support = float(signature.get("safe_support", 0))
+        if safe_support > 0:
+            score += safe_support * 0.5
     return score
 
 
 def select_signatures_for_llm_review(signatures: List[dict], *, role: str, max_review: int) -> List[dict]:
-    """Select the highest-impact signatures for bounded LLM review."""
+    """Select the most suspicious signatures for LLM review."""
     if not signatures or max_review <= 0:
         return []
 
-    supports = [float(sig.get("support", 0)) for sig in signatures]
-    support_floor = _quantile(supports, 0.75, 0.0)
-    scored = [(_review_score(sig, role, support_floor), sig) for sig in signatures]
-    scored.sort(key=lambda item: (item[0], float(item[1].get("support", 0))), reverse=True)
+    scored = [(_suspicion_score(sig, role), sig) for sig in signatures]
+    scored.sort(key=lambda item: item[0], reverse=True)
     selected = [sig for _, sig in scored[:max_review]]
 
+    top_score = scored[0][0] if scored else 0.0
+    cutoff_score = scored[min(max_review, len(scored)) - 1][0] if scored else 0.0
     log.info(
-        "Selected %d/%d %s signatures for LLM review (support floor %.1f)",
+        "Selected %d/%d %s signatures for LLM review (suspicion score range: %.2f - %.2f)",
         len(selected),
         len(signatures),
         role,
-        support_floor,
+        cutoff_score,
+        top_score,
     )
     return selected
 
@@ -72,21 +89,34 @@ def select_signatures_for_llm_review(signatures: List[dict], *, role: str, max_r
 def _build_prompt(role: str, batch: List[dict]) -> str:
     role_guidance = {
         "safe": (
-            "Keep reusable benign-language patterns that generalize across prompts. "
-            "Drop only if clearly a benchmark/task-format artifact, narrow named-entity/topic span, or overly specific template fragment."
+            "These are SAFE-ALLOW patterns — they let prompts bypass deeper analysis. "
+            "A bad safe pattern that matches attack text causes a false negative. "
+            "DROP patterns that: are narrow topic/entity-specific (e.g. a specific product name, "
+            "benchmark preamble, template header); contain formatting artifacts (brackets, pipes, "
+            "special chars); are too generic/stopword-heavy to reliably indicate safety; "
+            "look like dataset boilerplate rather than genuine user language."
         ),
         "malicious": (
-            "Keep reusable attack or jailbreak intent patterns. "
-            "Drop only if clearly an assistant response wrapper, persona boilerplate, dataset formatting token, or narrow topical fragment."
+            "These are MALICIOUS-BLOCK patterns — they flag prompts as attacks. "
+            "A bad malicious pattern that matches benign text causes a false positive. "
+            "DROP patterns that: are generic phrases found in normal conversation; "
+            "contain benchmark/evaluation formatting artifacts; are assistant-side response "
+            "wrappers or persona preambles; are narrow topical fragments unrelated to attacks; "
+            "contain structural tokens (numbering, bullet markers, template variables)."
         ),
     }[role]
 
     lines = [
-        "You are reviewing extracted signature candidates for a prompt-injection detector.",
-        "Be conservative: if uncertain, keep the signature.",
+        "You are a strict quality filter for a prompt-injection detection system's signature rules.",
         f"Role: {role.upper()}",
         role_guidance,
-        'Return ONLY valid JSON in this format: {"drop_ids": [1, 2]}',
+        "",
+        "Review each candidate critically. Drop any that would not generalize well to unseen data.",
+        "When in doubt about a pattern's quality, DROP it — false positives/negatives are costly.",
+        "",
+        'Return ONLY valid JSON: {"drop_ids": [1, 2, ...]}',
+        'If all candidates are good, return: {"drop_ids": []}',
+        "",
         "Candidates:",
     ]
 
@@ -102,11 +132,12 @@ def _build_prompt(role: str, batch: List[dict]) -> str:
                     "id": idx,
                     "pattern": pattern,
                     "support": support,
-                    "other_support": other_support,
+                    "cross_class_support": other_support,
                     "precision": round(precision, 4),
                     "token_count": int(stats["token_count"]),
                     "alpha_ratio": round(stats["alpha_ratio"], 3),
                     "punct_ratio": round(stats["punct_ratio"], 3),
+                    "stopword_ratio": round(stats["stopword_ratio"], 3),
                     "capitalized_ratio": round(stats["capitalized_token_ratio"], 3),
                 },
                 ensure_ascii=True,
@@ -124,7 +155,7 @@ def _call_ollama(model: str, prompt: str, timeout_s: int) -> str | None:
             "stream": False,
             "options": {
                 "temperature": 0,
-                "num_predict": 250,
+                "num_predict": 400,
             },
         }
     ).encode("utf-8")
@@ -175,9 +206,9 @@ def apply_llm_signature_filter(
     model: str,
     max_review: int,
     batch_size: int,
-    timeout_s: int = 45,
+    timeout_s: int = 60,
 ) -> List[dict]:
-    """Apply a bounded LLM veto on a small statistically selected subset."""
+    """Apply LLM review on a broad set of suspicious signatures."""
     review_subset = select_signatures_for_llm_review(
         signatures,
         role=role,
@@ -187,8 +218,11 @@ def apply_llm_signature_filter(
         return signatures
 
     dropped_patterns: set[str] = set()
-    for start in range(0, len(review_subset), batch_size):
+    n_batches = (len(review_subset) + batch_size - 1) // batch_size
+    for batch_idx, start in enumerate(range(0, len(review_subset), batch_size), start=1):
         batch = review_subset[start:start + batch_size]
+        if batch_idx % 10 == 1 or batch_idx == n_batches:
+            log.info("  LLM review %s batch %d/%d …", role, batch_idx, n_batches)
         response_text = _call_ollama(model, _build_prompt(role, batch), timeout_s)
         if not response_text:
             continue
@@ -203,9 +237,10 @@ def apply_llm_signature_filter(
 
     kept = [sig for sig in signatures if str(sig.get("pattern", "")) not in dropped_patterns]
     log.info(
-        "LLM filter dropped %d reviewed %s signatures; %d total remain",
+        "LLM filter dropped %d %s signatures; %d → %d remain",
         len(dropped_patterns),
         role,
+        len(signatures),
         len(kept),
     )
     return kept
