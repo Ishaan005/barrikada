@@ -124,6 +124,28 @@ def test_layer_b():
     print(f"Accuracy: {accuracy}")
     print(f"Recall: {tp /(tp+fn)}")
     print(f"Total detections: {results_df['predicted_label'].sum()}")
+
+    # --- Classification quality metrics ---
+    print("\n" + "="*60)
+    print("CLASSIFICATION QUALITY")
+    print("="*60)
+    flag_rate = flag_total / total
+    decisive_rate = 1 - flag_rate
+    correct_decisive = safe_allow + malicious_block
+    incorrect_decisive = safe_block + malicious_allow
+    total_decisive = correct_decisive + incorrect_decisive
+    decisive_accuracy = correct_decisive / total_decisive if total_decisive > 0 else 0
+
+    print(f"Flag rate:              {flag_rate:.4f} ({flag_total}/{total})")
+    print(f"Decisive rate:          {decisive_rate:.4f} ({total_decisive}/{total})")
+    print(f"Decisive accuracy:      {decisive_accuracy:.4f} ({correct_decisive}/{total_decisive})")
+    print(f"  Correct:   {correct_decisive}  (safe→allow: {safe_allow}, malicious→block: {malicious_block})")
+    print(f"  Incorrect: {incorrect_decisive}  (safe→block: {safe_block}, malicious→allow: {malicious_allow})")
+
+    # Detection rate (flag + block = detected, considers flag as "caught")
+    detected_mal = malicious_flag + malicious_block
+    detection_rate = detected_mal / malicious_total if malicious_total > 0 else 0
+    print(f"\nDetection rate (flag+block): {detection_rate:.4f} ({detected_mal}/{malicious_total})")
     
     return output_path
 
