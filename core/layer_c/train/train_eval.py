@@ -23,8 +23,7 @@ def _emb_cache_path(texts, model_name: str) -> Path:
         h.update(t.encode())
     return _EMB_CACHE_DIR / f"{h.hexdigest()}.npy"
 
-def encode_texts(texts, model: SentenceTransformer, batch_size=None, use_cache: bool = True):
-    """Encode texts to dense embeddings, with optional disk cache."""
+def encode_texts(texts, model: SentenceTransformer, batch_size=None, use_cache = True):
     if batch_size is None:
         batch_size = _settings.layer_c_embedding_batch_size
     texts_list = list(texts)

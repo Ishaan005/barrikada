@@ -6,7 +6,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from core.layer_c.training_utils import load_data
+from core.layer_c.train.load_data import load_data
 from core.settings import Settings
 
 from sklearn.model_selection import train_test_split
