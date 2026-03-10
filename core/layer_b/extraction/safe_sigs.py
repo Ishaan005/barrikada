@@ -4,12 +4,6 @@ import time
 
 import numpy as np
 
-from models.PatternStats import PatternStats
-from core.layer_b.extraction.vectorise import (
-    compute_statistical_quality_thresholds,
-    passes_statistical_quality_filter,
-)
-
 log = logging.getLogger(__name__)
 
 
@@ -30,52 +24,36 @@ def build_safe_signatures(thresholds, w_vocab, w_safe_df, w_mal_df):
     passing_indices = np.nonzero(mask)[0]
     log.info("  %d / %d features pass support & DF-cap pre-filter", len(passing_indices), len(w_vocab))
 
-    #Statistical quality filter 
-    candidate_patterns = [str(w_vocab[i]) for i in passing_indices]
-    candidate_supports = np.asarray([int(w_safe_df[i]) for i in passing_indices], dtype=np.int32)
-    quality_thresholds = compute_statistical_quality_thresholds(
-        candidate_patterns, candidate_supports, role="safe",
-    )
-    log.info("  SAFE quality thresholds: %s", quality_thresholds)
-
     candidates = []
-    filtered_count = 0
     for i in passing_indices:
         pattern = str(w_vocab[i])
         safe_df = int(w_safe_df[i])
         mal_df = int(w_mal_df[i])
 
-        if not passes_statistical_quality_filter(pattern, safe_df, quality_thresholds, role="safe"):
-            filtered_count += 1
-            continue
-
         precision = safe_df / (safe_df + mal_df) if (safe_df + mal_df) else 0.0
         if precision < precision_threshold:
             continue
 
-        candidates.append(PatternStats(pattern, safe_df, mal_df))
-
-    log.info("  SAFE statistical filter removed %d candidates", filtered_count)
+        candidates.append({"pattern": pattern, "safe_df": safe_df, "mal_df": mal_df, "precision": precision})
 
     # Sort by: precision (highest first), then support-per-token (favour concise
     # patterns), then raw support, then shortest pattern wins ties
     candidates.sort(
         key=lambda c: (
-            c.safe_precision,
-            c.safe_df / max(1, len(c.pattern.split())),
-            c.safe_df,
-            -len(c.pattern),
+            c["precision"],
+            c["safe_df"] / max(1, len(c["pattern"].split())),
+            c["safe_df"],
+            -len(c["pattern"]),
         ),
         reverse=True,
     )
 
-    # Build output dicts
     out = [
         {
-            "pattern":           c.pattern,
-            "support":           c.safe_df,
-            "malicious_support": c.mal_df,
-            "safe_precision":    round(c.safe_precision, 4),
+            "pattern":           c["pattern"],
+            "support":           c["safe_df"],
+            "malicious_support": c["mal_df"],
+            "safe_precision":    round(c["precision"], 4),
             "type":              "allow-safe",
         }
         for c in candidates

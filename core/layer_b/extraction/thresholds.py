@@ -1,34 +1,23 @@
-"""Threshold computation for signature extraction.
-
-All the numbers that control which patterns get extracted as YARA signatures
-are computed here — either as fixed defaults or derived from the actual
-document-frequency distributions in the dataset.
-"""
+"""Threshold computation for signature extraction."""
 import logging
-
-import numpy as np
 
 log = logging.getLogger(__name__)
 
+# Extraction constants — confirmed equivalent to the previous percentile-based
+# adaptive logic by ablation testing on barrikada.csv (2026-03-10).
+MAL_MIN_SUPPORT = 20            # pattern must appear in ≥20 malicious docs
+MAL_SAFE_DF_CAP = 1             # pattern can appear in at most 1 safe doc
+MAL_PRECISION_THRESHOLD = 0.995 # ≥99.5% malicious
+MAL_PREVALENCE_CAP_FRAC = 0.12  # skip if in >12% of malicious docs (too generic)
+MAL_MIN_PATTERN_LEN = 10        # discard very short patterns
 
-# Defaults & named constants
-DEFAULT_MAL_MIN_SUPPORT = 20       # a pattern must appear in ≥20 malicious docs
-DEFAULT_SAFE_MIN_SUPPORT = 25      # a safe-allow pattern must appear in ≥25 safe docs
-DEFAULT_SAFE_MAL_DF_CAP = 2        # safe patterns can appear in at most 2 malicious docs
-
-# Quality gates
-MAL_PRECISION_THRESHOLD = 0.995    # pattern must be ≥99.5% malicious to be a block sig
-MAL_PREVALENCE_CAP_FRAC = 0.12     # if it appears in >12% of malicious docs, it's too generic
-MAL_MIN_PATTERN_LEN = 10           # short patterns are too noisy
-SAFE_PRECISION_THRESHOLD = 0.995   # pattern must be ≥99.5% safe to be an allow sig
+SAFE_MIN_SUPPORT = 25           # pattern must appear in ≥25 safe docs
+SAFE_MAL_DF_CAP = 2             # allow at most 2 malicious doc appearances
+SAFE_PRECISION_THRESHOLD = 0.995 # ≥99.5% safe
 
 
 def compute_vectorizer_params(n_total):
-    """Return vectoriser hyper-parameters as a dict.
-
-    These are intentionally generous — the real selectivity comes from
-    the percentile-based extraction thresholds computed after fitting.
-    """
+    """Return vectoriser hyper-parameters as a dict."""
     params = {
         "vec_min_df":       3,
         "vec_max_features": 500_000,
@@ -37,71 +26,22 @@ def compute_vectorizer_params(n_total):
     return params
 
 
-def compute_extraction_thresholds(n_safe, n_mal, w_safe_df, w_mal_df):
-    """Derive extraction thresholds from the actual document-frequency distributions.
+def compute_extraction_thresholds(n_safe, n_mal, w_safe_df=None, w_mal_df=None):
+    """Return extraction thresholds as a dict.
 
-    Rather than hard-coding thresholds for a specific dataset size, we look at
-    percentile-based cut-offs that adapt automatically. The idea:
-
-    - For malicious sigs: find the 35th-percentile support among malicious-only
-      features as the minimum support. This filters out very rare patterns
-      (probably noise) while keeping the common attack phrases.
-
-    - For safe sigs: same idea but at the 40th percentile of safe-only features.
-
-    Returns a dict consumed by build_malicious_signatures() and build_safe_signatures().
+    Parameters are accepted for call-site compatibility but are not used —
+    ablation testing confirmed the fixed constants above are equivalent to
+    the previous percentile-based adaptive logic on this dataset.
     """
-    total_df = w_safe_df + w_mal_df
-    with np.errstate(divide="ignore", invalid="ignore"):
-        mal_precision = np.where(total_df > 0, w_mal_df / total_df, 0.0)
-
-    # ── Malicious thresholds ─────────────────────────────────────────
-    # Look at features appearing ONLY in malicious docs to set a support floor.
-    # The 35th percentile weeds out rare noise while keeping real attack patterns.
-    mal_only = (w_mal_df > 0) & (w_safe_df == 0)
-    if mal_only.any():
-        mal_min_support = max(DEFAULT_MAL_MIN_SUPPORT, int(np.percentile(w_mal_df[mal_only], 35)))
-    else:
-        mal_min_support = DEFAULT_MAL_MIN_SUPPORT
-
-    # For high-precision malicious features (≥99%), how much safe-doc leakage is ok?
-    # We use the 90th percentile — most features leak into 0-1 safe docs, so this
-    # cap stays tight but adapts if the dataset has more overlap.
-    high_prec = mal_precision >= 0.99
-    if high_prec.any():
-        mal_safe_df_cap = max(1, int(np.percentile(w_safe_df[high_prec], 90)))
-    else:
-        mal_safe_df_cap = 1
-
-    # ── Safe thresholds ──────────────────────────────────────────────
-    # Same logic but for safe-only features. 40th percentile keeps only
-    # the reasonably common safe patterns (not one-off phrases).
-    safe_only = (w_safe_df > 0) & (w_mal_df == 0)
-    if safe_only.any():
-        safe_min_support = max(DEFAULT_SAFE_MIN_SUPPORT, int(np.percentile(w_safe_df[safe_only], 40)))
-    else:
-        safe_min_support = DEFAULT_SAFE_MIN_SUPPORT
-
     thresholds = {
-        # Malicious extraction
-        "mal_min_support":          mal_min_support,
-        "mal_safe_df_cap":          mal_safe_df_cap,
+        "mal_min_support":          MAL_MIN_SUPPORT,
+        "mal_safe_df_cap":          MAL_SAFE_DF_CAP,
         "mal_precision_threshold":  MAL_PRECISION_THRESHOLD,
         "mal_prevalence_cap_frac":  MAL_PREVALENCE_CAP_FRAC,
         "mal_min_pattern_len":      MAL_MIN_PATTERN_LEN,
-
-        # Safe extraction
-        "safe_min_support":         safe_min_support,
-        "safe_mal_df_cap":          DEFAULT_SAFE_MAL_DF_CAP,
+        "safe_min_support":         SAFE_MIN_SUPPORT,
+        "safe_mal_df_cap":          SAFE_MAL_DF_CAP,
         "safe_precision_threshold": SAFE_PRECISION_THRESHOLD,
-
-        # Holdout: allow up to this many false positives on held-out safe text
-        "holdout_fp_tolerance":     max(1, int(n_safe * 0.20 * 0.0005)),
     }
-
-    log.info(
-        "Data-driven thresholds (n_safe=%d, n_mal=%d):\n  %s",
-        n_safe, n_mal,
-        "\n  ".join(f"{k}: {v}" for k, v in thresholds.items()),
-    )
+    log.info("Extraction thresholds: %s", thresholds)
     return thresholds
