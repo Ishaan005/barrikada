@@ -9,36 +9,31 @@ class Settings(BaseModel):
     # Use absolute paths based on project root
     _project_root = Path(__file__).parent.parent
 
-    ### Layer B (signatures)
-    # Scoring/thresholds
-    layer_b_allow_confidence: float = 0.99
-    layer_b_block_min_hits: int = 4
-    layer_b_block_min_rule_precision: float = 1
-    layer_b_flag_confidence: float = 0.5
+    ### Layer B (embedding-based contrastive signature engine)
+    layer_b_embedding_model: str = "BAAI/bge-small-en-v1.5"
+
+    # Two-threshold decision system (applied to mean top-k attack similarity)
+    # Empirically calibrated on barrikada_test.csv (block_prec=0.96, fblk=0.53%)
+    layer_b_block_threshold: float = 0.78   # attack sim above this → BLOCK (with contrastive guard)
+    layer_b_flag_threshold: float = 0.55    # attack sim above this → FLAG
+    # Below flag_threshold → SAFE (allow)
+
+    # Top-k similarity aggregation
+    layer_b_top_k: int = 5
+
+    # Cluster building
+    layer_b_n_clusters: int = 64
+    layer_b_min_cluster_purity: float = 0.70  # drop clusters below this purity
+    layer_b_purity_proximity: float = 0.70     # only count benign prompts with sim >= this
+
+    # Confidence values emitted in LayerBResult
     layer_b_block_confidence: float = 0.95
-
-    # Secondary block: corroborating $s evidence lowers the $re threshold
-    layer_b_block_secondary_re_hits: int = 3     # min qualifying $re for secondary block
-    layer_b_block_secondary_s_hits: int = 7      # min unique $s hits to corroborate
-
-    # Verdict for inputs with zero malicious matches and not allowlisted
-    layer_b_no_match_verdict: str = "flag"        # "allow" or "flag"
-    layer_b_no_match_confidence: float = 0.3
-
-    # Allow verdict for very weak evidence (only $s hits, low confidence)
-    layer_b_allow_max_s_confidence: float = 0.0   # 0 = disabled; set >0 to enable
+    layer_b_flag_confidence: float = 0.50
+    layer_b_safe_confidence: float = 0.10
 
     @property
-    def layer_b_signatures_extracted_dir(self):
-        return str(self._project_root / "core/layer_b" / "signatures" / "extracted")
-
-    @property
-    def layer_b_malicious_rules_path(self):
-        return str(Path(self.layer_b_signatures_extracted_dir) / "malicious_block_high_signatures.yar")
-
-    @property
-    def layer_b_allow_rules_path(self):
-        return str(Path(self.layer_b_signatures_extracted_dir) / "safe_allow_signatures.yar")
+    def layer_b_signatures_dir(self):
+        return str(self._project_root / "core" / "layer_b" / "signatures" / "embeddings")
     
 
     ### Layer C

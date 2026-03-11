@@ -1,15 +1,15 @@
-"""Extract YARA signatures from the Barrikada dataset.
+"""Build contrastive embedding signatures for Layer B.
 
-Thin orchestrator — all logic lives in core/layer_b/extraction/.
+Produces:
+  core/layer_b/signatures/embeddings/
+    centroids.npy          — attack centroids (purity-filtered)
+    faiss_index.bin        — FAISS IP index over attack centroids
+    benign_centroids.npy   — benign centroids
+    benign_faiss_index.bin — FAISS IP index over benign centroids
+    cluster_radii.json     — per-cluster radius for radius filtering
+    metadata.json          — build metadata
 
-- Input:   datasets/barrikada.csv
-- Outputs: core/layer_b/signatures/extracted/
-    - safe_allow_signatures.yar
-    - malicious_block_high_signatures.yar
-
-Dataset requirements:
-- Column `label`: 0 = SAFE, 1 = MALICIOUS
-- Text column: `prompt` (preferred) or `text` (fallback)
+Dataset: datasets/barrikada.csv  (columns: text, label  — 0=safe, 1=malicious)
 """
 
 import gc
@@ -18,26 +18,27 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
-
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.layer_b.extraction.dataset        import load_dataset
-from core.layer_b.extraction.thresholds     import compute_vectorizer_params, compute_extraction_thresholds
-from core.layer_b.extraction.vectorise      import make_vectorizers, doc_freq
-from core.layer_b.extraction.safe_sigs      import build_safe_signatures
-from core.layer_b.extraction.malicious_sigs import build_malicious_signatures
-from core.layer_b.extraction.yara_writer    import write_yara_rules
+from core.layer_b.extraction.dataset import load_dataset
+from core.layer_b.extraction.embedding_builder import (
+    encode_prompts,
+    cluster_embeddings,
+    build_centroids,
+    compute_cluster_purity,
+    compute_cluster_radii,
+    filter_clusters_by_purity,
+    build_faiss_index,
+    collect_metadata,
+    save_artifacts,
+)
+from core.settings import Settings
 
 log = logging.getLogger(__name__)
 
 DATASET_CSV = Path("datasets/barrikada.csv")
-OUTDIR      = Path("core/layer_b/signatures/extracted")
-
-# ---------------------------------------------------------------------------
-# Main pipeline
-# ---------------------------------------------------------------------------
+OUTDIR = Path("core/layer_b/signatures/embeddings")
 
 
 def main():
@@ -47,70 +48,86 @@ def main():
         datefmt="%H:%M:%S",
     )
     wall_start = time.perf_counter()
+    settings = Settings()
 
+    # ---- Load dataset ----
     texts, labels = load_dataset(DATASET_CSV)
+    n_safe = int((labels == 0).sum())
+    n_mal = int((labels == 1).sum())
+    log.info("Dataset: %d samples (safe=%d, malicious=%d)", len(labels), n_safe, n_mal)
 
-    n_safe  = int((labels == 0).sum())
-    n_mal   = int((labels == 1).sum())
-    n_total = len(labels)
-    log.info("Loaded %d samples (safe=%d, malicious=%d)", n_total, n_safe, n_mal)
+    injection_mask = labels == 1
+    benign_mask = labels == 0
+    injection_texts = texts[injection_mask].tolist()
+    benign_texts = texts[benign_mask].tolist()
 
-    vec_params = compute_vectorizer_params(n_total)
-
-    texts_norm = texts.tolist()
-    del texts
+    del texts, labels
     gc.collect()
 
-    # Fit the word vectoriser once; share DF arrays across SAFE and MALICIOUS phases.
-    word_vec, _ = make_vectorizers(
-        min_df=vec_params["vec_min_df"],
-        max_features=vec_params["vec_max_features"],
-    )
-    log.info("Fitting word vectoriser …")
-    
-    Xw = word_vec.fit_transform(texts_norm)
-    w_vocab = word_vec.get_feature_names_out()
-    log.info("  vocab=%d features, matrix=%s, nnz=%d", len(w_vocab), Xw.shape, Xw.nnz) # type: ignore[union-attr]
-
-    y = labels.astype(int)
-    w_safe_df = doc_freq(Xw[y == 0]) # type: ignore[index]
-    w_mal_df  = doc_freq(Xw[y == 1]) # type: ignore[index]
-    del Xw, word_vec
+    # ---- Encode ----
+    # Use fine-tuned contrastive model if available, else fall back to base model
+    model_name = settings.layer_b_embedding_model
+    log.info("Encoding injection prompts …")
+    attack_embeddings, _ = encode_prompts(injection_texts, model_name)
     gc.collect()
 
-    thresholds = compute_extraction_thresholds(n_safe, n_mal, w_safe_df, w_mal_df)
-    
-    # Carry vec params forward so downstream modules can reuse them
-    thresholds.update(vec_params)
-
-    safe_signatures = build_safe_signatures(thresholds, w_vocab, w_safe_df, w_mal_df)
+    log.info("Encoding benign prompts …")
+    benign_embeddings, _ = encode_prompts(benign_texts, model_name)
     gc.collect()
 
-    malicious_signatures = build_malicious_signatures(
-        texts_norm, labels, thresholds, w_vocab, w_safe_df, w_mal_df
-    )
+    # ---- Cluster attack prompts ----
+    n_clusters = settings.layer_b_n_clusters
+    log.info("Clustering %d attack embeddings (k=%d) …", len(attack_embeddings), n_clusters)
+    attack_labels, _ = cluster_embeddings(attack_embeddings, n_clusters=n_clusters)
     gc.collect()
 
-    safe_yar = OUTDIR / "safe_allow_signatures.yar"
-    mal_yar  = OUTDIR / "malicious_block_high_signatures.yar"
+    attack_cdata = build_centroids(attack_embeddings, attack_labels, n_clusters)
+    attack_centroids = attack_cdata["centroids"]
+    attack_ids = attack_cdata["cluster_ids"]
+    attack_sizes = attack_cdata["cluster_sizes"]
 
-    write_yara_rules(
-        safe_yar,
-        rule_prefix="SAFE_ALLOW_",
-        signatures=safe_signatures,
-        meta_keys=["safe_precision", "support", "malicious_support", "type"],
+    # ---- Cluster benign prompts ----
+    benign_k = max(16, n_clusters // 2)
+    log.info("Clustering %d benign embeddings (k=%d) …", len(benign_embeddings), benign_k)
+    benign_labels, _ = cluster_embeddings(benign_embeddings, n_clusters=benign_k)
+    gc.collect()
+
+    benign_cdata = build_centroids(benign_embeddings, benign_labels, benign_k)
+    benign_centroids = benign_cdata["centroids"]
+
+    # ---- Purity filtering ----
+    purity = compute_cluster_purity(
+        attack_labels, attack_embeddings, benign_embeddings,
+        attack_centroids, attack_ids,
+        proximity_threshold=settings.layer_b_purity_proximity,
     )
-    write_yara_rules(
-        mal_yar,
-        rule_prefix="DATA_HIGH_",
-        signatures=malicious_signatures,
-        meta_keys=["precision", "support", "safe_support", "type"],
+    radii = compute_cluster_radii(attack_embeddings, attack_labels,
+                                  attack_centroids, attack_ids)
+
+    min_purity = settings.layer_b_min_cluster_purity
+    attack_centroids, attack_ids, attack_sizes, radii = filter_clusters_by_purity(
+        attack_centroids, attack_ids, attack_sizes, purity, radii, min_purity,
     )
+
+    log.info("Final: %d attack centroids, %d benign centroids (dim=%d)",
+             len(attack_ids), benign_centroids.shape[0], attack_centroids.shape[1])
+
+    # ---- FAISS indices ----
+    attack_index = build_faiss_index(attack_centroids)
+    benign_index = build_faiss_index(benign_centroids)
+
+    # ---- Metadata ----
+    metadata = collect_metadata(
+        attack_ids, attack_sizes, attack_labels, injection_texts,
+        model_name, n_clusters, purity, radii,
+    )
+
+    # ---- Save ----
+    save_artifacts(OUTDIR, attack_centroids, attack_index, metadata,
+                   benign_centroids, benign_index, radii)
 
     elapsed = time.perf_counter() - wall_start
-    log.info("Wrote %d SAFE YARA rules     -> %s", len(safe_signatures),      safe_yar)
-    log.info("Wrote %d MALICIOUS YARA rules -> %s", len(malicious_signatures), mal_yar)
-    log.info("Total wall time: %.1fs", elapsed)
+    log.info("Done. %d attack clusters, wall time: %.1fs", len(attack_ids), elapsed)
 
 
 if __name__ == "__main__":

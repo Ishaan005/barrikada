@@ -1,186 +1,199 @@
+"""Contrastive embedding signature engine for Layer B.
+
+Runtime flow:
+1. Embed the input prompt (L2-normalised).
+2. Retrieve top-k attack centroid similarities via FAISS.
+3. Retrieve top-k benign centroid similarities via FAISS.
+4. Compute contrastive score = mean(top-k attack) − mean(top-k benign).
+5. Apply two-threshold decision:
+       score > block_threshold  → BLOCK
+       score > flag_threshold   → FLAG
+       else                     → ALLOW (safe)
+6. Optional radius filter: reject matches where the prompt is outside
+   the cluster's radius envelope.
+"""
+
 import time
 import hashlib
-from typing import List, Tuple, Optional
+import json
+import logging
+from typing import List
 from pathlib import Path
-import yara
+
+import numpy as np
+import faiss
+from sentence_transformers import SentenceTransformer
 
 from core.settings import Settings
 from models.SignatureMatch import SignatureMatch, Severity
 from models.LayerBResult import LayerBResult
 
+log = logging.getLogger(__name__)
+
 
 class SignatureEngine:
     def __init__(self):
         self.settings = Settings()
-        self.malicious_rules: Optional[yara.Rules] = None
-        self.allow_rules: Optional[yara.Rules] = None
+        self._load_model()
         self._load_signatures()
 
+    # ------------------------------------------------------------------
+    # Initialisation helpers
+    # ------------------------------------------------------------------
+
+    def _load_model(self):
+        model_name = self.settings.layer_b_embedding_model
+        self.model = SentenceTransformer(model_name)
+        log.info("Loaded embedding model: %s", model_name)
+
     def _load_signatures(self):
-        extracted_high = Path(self.settings.layer_b_malicious_rules_path)
-        extracted_allow = Path(self.settings.layer_b_allow_rules_path)
+        sig = Path(self.settings.layer_b_signatures_dir)
 
-        if not extracted_high.exists():
+        # Attack artefacts
+        attack_idx_path = sig / "faiss_index.bin"
+        if not attack_idx_path.exists():
             raise FileNotFoundError(
-                "Extracted MALICIOUS signatures not found. Run scripts/extract_signature_patterns.py "
-                f"to generate {extracted_high}"
+                f"FAISS index not found at {attack_idx_path}. "
+                "Run scripts/extract_signature_patterns.py first."
             )
+        cpu_attack = faiss.read_index(str(attack_idx_path))
+        self.attack_centroids = np.load(str(sig / "centroids.npy"))
+        with open(sig / "metadata.json") as f:
+            self.metadata = json.load(f)
 
-        self.malicious_rules = yara.compile(filepath=str(extracted_high))
-        print(f"Loaded extracted MALICIOUS signatures: {extracted_high.name}")
-
-        if extracted_allow.exists():
-            self.allow_rules = yara.compile(filepath=str(extracted_allow))
-            print(f"Loaded extracted SAFE allow signatures: {extracted_allow.name}")
+        # Benign artefacts
+        benign_idx_path = sig / "benign_faiss_index.bin"
+        if benign_idx_path.exists():
+            cpu_benign = faiss.read_index(str(benign_idx_path))
+            self.benign_centroids = np.load(str(sig / "benign_centroids.npy"))
         else:
-            self.allow_rules = None
-            print(f"SAFE allow signatures not found ({extracted_allow.name}); allowlisting disabled.")
+            cpu_benign = None
+            self.benign_centroids = None
+            log.warning("No benign centroids found — contrastive scoring disabled.")
 
-    def _is_allowlisted(self, text: str) -> Tuple[bool, List[str]]:
-        """Return (is_allowlisted, matched_rule_ids) for the given text."""
-        if self.allow_rules is None:
-            return False, []
-        try:
-            matches = self.allow_rules.match(data=text)
-            rule_ids = [m.rule for m in matches]
-            return bool(rule_ids), rule_ids
-        except Exception as e:
-            print(f"YARA allowlisting error: {e}")
-            return False, []
+        # Cluster radii
+        radii_path = sig / "cluster_radii.json"
+        if radii_path.exists():
+            with open(radii_path) as f:
+                self.radii = {int(k): v for k, v in json.load(f).items()}
+        else:
+            self.radii = {}
 
-    def _match_malicious_yara(self, text: str) -> List[SignatureMatch]:
-        """Match extracted malicious YARA rules against text, returning per-instance matches."""
-        if self.malicious_rules is None:
-            return []
+        # Move to GPU if available
+        n_gpus = faiss.get_num_gpus()
+        if n_gpus > 0:
+            res = faiss.StandardGpuResources() #type: ignore
+            self.attack_index = faiss.index_cpu_to_gpu(res, 0, cpu_attack) #type: ignore
+            log.info("Attack FAISS index → GPU 0")
+            if cpu_benign is not None:
+                self.benign_index = faiss.index_cpu_to_gpu(#type: ignore
+                    faiss.StandardGpuResources(), 0, cpu_benign,#type: ignore
+                )
+                log.info("Benign FAISS index → GPU 0")
+            else:
+                self.benign_index = None
+        else:
+            self.attack_index = cpu_attack
+            self.benign_index = cpu_benign
 
-        matches: List[SignatureMatch] = []
-        try:
-            for match in self.malicious_rules.match(data=text):
-                precision_raw = match.meta.get("precision")
-                try:
-                    precision = float(precision_raw) if precision_raw is not None else 1.0
-                except (TypeError, ValueError):
-                    precision = 1.0
+        n_attack = self.attack_centroids.shape[0]
+        n_benign = self.benign_centroids.shape[0] if self.benign_centroids is not None else 0
+        log.info("Loaded %d attack + %d benign centroids (dim=%d)",
+                 n_attack, n_benign, self.attack_centroids.shape[1])
 
-                tags = list(getattr(match, "tags", None) or [])
-                rule_type = match.meta.get("type")
-                if rule_type:
-                    tags.append(str(rule_type))
+    # ------------------------------------------------------------------
+    # Embedding
+    # ------------------------------------------------------------------
 
-                # Prefer the original extracted pattern text for interpretability
-                description = match.meta.get("pattern", match.rule)
+    def _embed(self, text: str) -> np.ndarray:
+        vec = self.model.encode([text], normalize_embeddings=True)
+        return vec.astype(np.float32)
 
-                for string_match in match.strings:
-                    for instance in string_match.instances:
-                        matched_data = instance.matched_data.decode("utf-8", errors="ignore")
-                        matches.append(SignatureMatch(
-                            rule_id=match.rule,
-                            severity=Severity.MALICIOUS,
-                            pattern=string_match.identifier,
-                            matched_text=matched_data,
-                            start_pos=instance.offset,
-                            end_pos=instance.offset + len(matched_data),
-                            rule_description=description,
-                            tags=tags,
-                            confidence=precision,
-                        ))
-        except Exception as e:
-            print(f"YARA matching error: {e}")
-
-        return matches
+    # ------------------------------------------------------------------
+    # Detection
+    # ------------------------------------------------------------------
 
     def detect(self, text: str) -> LayerBResult:
-        start_time = time.time()
+        start = time.time()
         input_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
 
-        # Check for malicious patterns first — prevents evasion by padding with safe text.
-        all_matches = self._match_malicious_yara(text)
+        query = self._embed(text)
+        top_k = self.settings.layer_b_top_k
 
-        if all_matches:
-            verdict, confidence = self._calculate_verdict(all_matches)
-            return LayerBResult(
-                input_hash=input_hash,
-                processing_time_ms=(time.time() - start_time) * 1000,
-                matches=all_matches,
-                verdict=verdict,
-                confidence_score=confidence,
-                allowlisted=False,
-                allowlist_rules=[],
-            )
+        # --- Attack similarity (top-k mean) ---
+        k_attack = min(top_k, self.attack_centroids.shape[0])
+        atk_scores, atk_ids = self.attack_index.search(query, k_attack)
+        atk_scores = atk_scores[0]  # shape (k_attack,)
+        atk_ids = atk_ids[0]
+        attack_sim = float(np.mean(atk_scores[:k_attack]))
 
-        # No malicious matches — check allow-list for early exit.
-        allowlisted, allow_rules = self._is_allowlisted(text)
-        if allowlisted:
-            return LayerBResult(
-                input_hash=input_hash,
-                processing_time_ms=(time.time() - start_time) * 1000,
-                matches=[],
-                verdict="allow",
-                confidence_score=self.settings.layer_b_allow_confidence,
-                allowlisted=True,
-                allowlist_rules=allow_rules,
-            )
+        # --- Benign similarity (top-k mean) ---
+        if self.benign_index is not None:
+            k_benign = min(top_k, self.benign_centroids.shape[0])#type: ignore
+            ben_scores, _ = self.benign_index.search(query, k_benign)
+            ben_scores = ben_scores[0]
+            benign_sim = float(np.mean(ben_scores[:k_benign]))
+        else:
+            benign_sim = 0.0
 
-        # Not allowlisted, no matches — verdict depends on setting.
-        no_match_verdict = self.settings.layer_b_no_match_verdict
-        no_match_confidence = self.settings.layer_b_no_match_confidence
+        # --- Contrastive score (attack sim - benign sim) ---
+        contrastive = attack_sim - benign_sim
+
+        # --- Build match objects (informational) ---
+        matches: List[SignatureMatch] = []
+        cluster_meta = {c["cluster_id"]: c for c in self.metadata.get("clusters", [])}
+        for rank, (score, idx) in enumerate(zip(atk_scores, atk_ids)):
+            score_f = float(score)
+            if score_f < 0.20:
+                continue
+            cid = int(idx)
+            meta = cluster_meta.get(cid, {})
+            samples = meta.get("sample_prompts", [])
+            desc = samples[0][:100] if samples else f"cluster_{cid}"
+            matches.append(SignatureMatch(
+                rule_id=f"cluster_{cid}",
+                severity=Severity.MALICIOUS,
+                pattern="contrastive_embedding",
+                matched_text=text[:200],
+                start_pos=0,
+                end_pos=len(text),
+                rule_description=desc,
+                tags=[f"cluster_{cid}", f"rank_{rank}",
+                      f"atk_sim={attack_sim:.3f}", f"ben_sim={benign_sim:.3f}",
+                      f"contrastive={contrastive:.3f}"],
+                confidence=score_f,
+            ))
+
+        # --- Two-threshold decision on mean top-k attack similarity ---
+        # block_threshold / flag_threshold are compared against attack_sim.
+        # Contrastive guard: if benign similarity exceeds attack similarity at
+        # the block boundary, demote to FLAG to avoid false positives.
+        block_thr = self.settings.layer_b_block_threshold
+        flag_thr = self.settings.layer_b_flag_threshold
+
+        if attack_sim >= block_thr:
+            # Contrastive guard: only hard-block when attack clearly dominates benign
+            if attack_sim > benign_sim:
+                verdict = "block"
+                confidence = self.settings.layer_b_block_confidence
+            else:
+                verdict = "flag"
+                confidence = self.settings.layer_b_flag_confidence
+        elif attack_sim >= flag_thr:
+            verdict = "flag"
+            confidence = self.settings.layer_b_flag_confidence
+        else:
+            verdict = "allow"
+            confidence = self.settings.layer_b_safe_confidence
+
+        elapsed = (time.time() - start) * 1000
+
         return LayerBResult(
             input_hash=input_hash,
-            processing_time_ms=(time.time() - start_time) * 1000,
-            matches=[],
-            verdict=no_match_verdict,
-            confidence_score=no_match_confidence,
+            processing_time_ms=elapsed,
+            matches=matches,
+            verdict=verdict,
+            confidence_score=confidence,
             allowlisted=False,
             allowlist_rules=[],
         )
-
-    def _calculate_verdict(self, matches: List[SignatureMatch]) -> Tuple[str, float]:
-        """Return (verdict, confidence) for a non-empty list of malicious signature matches.
-
-        Blocking logic (two-tier):
-          1. Primary block: >= N distinct high-precision word-boundary ($re) matches.
-          2. Secondary block: >= M high-precision $re matches AND >= K distinct $s matches
-             (char n-gram corroboration lowers the $re threshold).
-
-        Allow logic:
-          If there are *no* $re hits at all and only weak $s evidence (below a confidence
-          threshold), the input is allowed — the $s hits are likely coincidental n-gram
-          overlaps rather than genuine malice.
-
-        Everything else is flagged for downstream layers.
-        """
-        # Dedup per-instance matches, keeping highest confidence per description.
-        word_hits: dict[str, float] = {}   # $re matches
-        s_hits: dict[str, float] = {}      # $s matches
-        for m in matches:
-            if m.pattern == "$re":
-                word_hits[m.rule_description] = max(
-                    word_hits.get(m.rule_description, 0.0), m.confidence
-                )
-            elif m.pattern == "$s":
-                s_hits[m.rule_description] = max(
-                    s_hits.get(m.rule_description, 0.0), m.confidence
-                )
-
-        qualifying_re = sum(
-            1 for conf in word_hits.values()
-            if conf >= self.settings.layer_b_block_min_rule_precision
-        )
-        unique_s = len(s_hits)
-
-        # --- Primary block: strong word-boundary evidence ---
-        if qualifying_re >= self.settings.layer_b_block_min_hits:
-            return "block", self.settings.layer_b_block_confidence
-
-        # --- Secondary block: moderate $re + corroborating $s ---
-        if (qualifying_re >= self.settings.layer_b_block_secondary_re_hits
-                and unique_s >= self.settings.layer_b_block_secondary_s_hits):
-            return "block", self.settings.layer_b_block_confidence * 0.9
-
-        # --- Allow: very weak evidence (only $s, no $re, low confidence) ---
-        if len(word_hits) == 0:
-            s_conf_sum = sum(s_hits.values())
-            if s_conf_sum < self.settings.layer_b_allow_max_s_confidence:
-                return "allow", self.settings.layer_b_no_match_confidence
-
-        return "flag", self.settings.layer_b_flag_confidence

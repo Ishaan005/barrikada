@@ -2,9 +2,8 @@
 
 Flow:
 1) Layer A preprocesses text and may hard-block for high-confidence flags.
-2) Layer B runs extracted YARA rules and SAFE allowlisting.
+2) Layer B runs embedding-based semantic similarity detection.
     - If MALICIOUS (block) => final verdict = block
-    - If SAFE (allowlisted) => final verdict = allow
     - If unsure (flag) => send to Layer C
 3) Layer C makes the final decision only for unsure cases.
     - If block or allow => final verdict
@@ -94,16 +93,6 @@ class PIPipeline:
         # ----- Layer B -----
         layer_b_result = self.layer_b_engine.detect(analysis_text)
 
-        # SAFE allowlisting => allow immediately (optimization)
-        if (not layer_a_result.suspicious) and getattr(layer_b_result, "allowlisted", False):
-            return self._create_result(
-                input_hash, start_time, layer_a_result,
-                layer_b_result=layer_b_result,
-                final_verdict=FinalVerdict.ALLOW,
-                decision_layer=DecisionLayer.LAYER_B,
-                confidence_score=layer_b_result.confidence_score,
-            )
-
         # MALICIOUS signatures => block immediately
         if layer_b_result.verdict == "block":
             return self._create_result(
@@ -115,8 +104,7 @@ class PIPipeline:
             )
 
         # ----- Layer C -----
-        # For security: anything not allowlisted SAFE is screened by Layer C.
-        # This prevents malicious prompts with no signature hits from being allowed.
+        # Anything not blocked by Layer B is screened by the ML classifier.
         layer_c_result = self.layer_c_classifier.predict(analysis_text)
 
         if layer_c_result.verdict == "block" or layer_c_result.verdict == "allow":

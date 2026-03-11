@@ -36,12 +36,13 @@ def test_layer_b():
         # Run Layer B on preprocessed text
         layer_b_result = layer_b.detect(layer_a_result.processed_text)
 
+        # Three-verdict system: block / flag / allow
         if layer_b_result.verdict == "block":
             predicted_label = 1
-        elif layer_b_result.verdict == "flag":
-            predicted_label = row['label']  # keep ground truth for "flag"
-        else:
+        elif layer_b_result.verdict == "allow":
             predicted_label = 0
+        else:  # flag → uncertain, keep ground truth
+            predicted_label = row['label']
         
         # Correct if predicted matches ground truth
         is_correct = predicted_label == row['label']
@@ -53,9 +54,9 @@ def test_layer_b():
             'layer_b_matches': len(layer_b_result.matches),
             'layer_b_verdict': layer_b_result.verdict,
             'layer_b_confidence': layer_b_result.confidence_score,
+            'layer_b_top_similarity': max((m.confidence for m in layer_b_result.matches), default=0.0),
             'predicted_label': predicted_label,
             'is_correct': is_correct,
-            'allowlisted': getattr(layer_b_result, 'allowlisted', False),
             'processing_time_ms': layer_b_result.processing_time_ms,
         })
     
@@ -100,7 +101,7 @@ def test_layer_b():
     
     # Print table header
     print(f"{'Ground Truth':<15} | {'Allow':>10} | {'Flag':>10} | {'Block':>10} | {'Total':>10}")
-    print("-" * 60)
+    print("-" * 62)
     
     # Print SAFE row
     print(f"{'SAFE':<15} | {safe_allow:>10} | {safe_flag:>10} | {safe_block:>10} | {safe_total:>10}")
@@ -112,9 +113,9 @@ def test_layer_b():
     allow_total = safe_allow + malicious_allow
     flag_total = safe_flag + malicious_flag
     block_total = safe_block + malicious_block
-    print("-" * 60)
+    print("-" * 62)
     print(f"{'Total':<15} | {allow_total:>10} | {flag_total:>10} | {block_total:>10} | {total:>10}")
-    print("="*60)
+    print("="*62)
     
     tp = ((results_df['predicted_label'] == 1) & (results_df['true_label'] == 1)).sum()
     fn = ((results_df['predicted_label'] == 0) & (results_df['true_label'] == 1)).sum()
@@ -123,7 +124,6 @@ def test_layer_b():
 
     print(f"Accuracy: {accuracy}")
     print(f"Recall: {tp /(tp+fn)}")
-    print(f"Total detections: {results_df['predicted_label'].sum()}")
 
     # --- Classification quality metrics ---
     print("\n" + "="*60)
@@ -131,7 +131,7 @@ def test_layer_b():
     print("="*60)
     flag_rate = flag_total / total
     decisive_rate = 1 - flag_rate
-    correct_decisive = safe_allow + malicious_block
+    correct_decisive = malicious_block + safe_allow
     incorrect_decisive = safe_block + malicious_allow
     total_decisive = correct_decisive + incorrect_decisive
     decisive_accuracy = correct_decisive / total_decisive if total_decisive > 0 else 0
@@ -139,13 +139,30 @@ def test_layer_b():
     print(f"Flag rate:              {flag_rate:.4f} ({flag_total}/{total})")
     print(f"Decisive rate:          {decisive_rate:.4f} ({total_decisive}/{total})")
     print(f"Decisive accuracy:      {decisive_accuracy:.4f} ({correct_decisive}/{total_decisive})")
-    print(f"  Correct:   {correct_decisive}  (safe→allow: {safe_allow}, malicious→block: {malicious_block})")
-    print(f"  Incorrect: {incorrect_decisive}  (safe→block: {safe_block}, malicious→allow: {malicious_allow})")
+    print(f"  Correct:   {correct_decisive}  (mal→block: {malicious_block}, safe→allow: {safe_allow})")
+    print(f"  Incorrect: {incorrect_decisive}  (safe→block: {safe_block}, mal→allow: {malicious_allow})")
 
-    # Detection rate (flag + block = detected, considers flag as "caught")
-    detected_mal = malicious_flag + malicious_block
-    detection_rate = detected_mal / malicious_total if malicious_total > 0 else 0
-    print(f"\nDetection rate (flag+block): {detection_rate:.4f} ({detected_mal}/{malicious_total})")
+    # Block precision = malicious_block / total_block
+    block_precision = malicious_block / block_total if block_total > 0 else 0
+    print(f"\nBlock precision:         {block_precision:.4f} ({malicious_block}/{block_total})")
+
+    # False block rate = safe_block / safe_total
+    false_block_rate = safe_block / safe_total if safe_total > 0 else 0
+    print(f"False block rate:        {false_block_rate:.4f} ({safe_block}/{safe_total})")
+
+    # Similarity score stats
+    print("\n" + "="*60)
+    print("SIMILARITY SCORE STATS")
+    print("="*60)
+    print(f"Mean top similarity:  {results_df['layer_b_top_similarity'].mean():.4f}")
+    print(f"Median:               {results_df['layer_b_top_similarity'].median():.4f}")
+    print(f"Std:                  {results_df['layer_b_top_similarity'].std():.4f}")
+    blocked = results_df[results_df['layer_b_verdict'] == 'block']
+    flagged = results_df[results_df['layer_b_verdict'] == 'flag']
+    if len(blocked) > 0:
+        print(f"Blocked avg sim:      {blocked['layer_b_top_similarity'].mean():.4f}")
+    if len(flagged) > 0:
+        print(f"Flagged avg sim:      {flagged['layer_b_top_similarity'].mean():.4f}")
     
     return output_path
 
