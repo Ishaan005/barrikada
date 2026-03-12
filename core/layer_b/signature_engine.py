@@ -1,18 +1,3 @@
-"""Contrastive embedding signature engine for Layer B.
-
-Runtime flow:
-1. Embed the input prompt (L2-normalised).
-2. Retrieve top-k attack centroid similarities via FAISS.
-3. Retrieve top-k benign centroid similarities via FAISS.
-4. Compute contrastive score = mean(top-k attack) − mean(top-k benign).
-5. Apply two-threshold decision:
-       score > block_threshold  → BLOCK
-       score > flag_threshold   → FLAG
-       else                     → ALLOW (safe)
-6. Optional radius filter: reject matches where the prompt is outside
-   the cluster's radius envelope.
-"""
-
 import time
 import hashlib
 import json
@@ -37,10 +22,7 @@ class SignatureEngine:
         self._load_model()
         self._load_signatures()
 
-    # ------------------------------------------------------------------
-    # Initialisation helpers
-    # ------------------------------------------------------------------
-
+    #init
     def _load_model(self):
         model_name = self.settings.layer_b_embedding_model
         self.model = SentenceTransformer(model_name)
@@ -101,33 +83,27 @@ class SignatureEngine:
         log.info("Loaded %d attack + %d benign centroids (dim=%d)",
                  n_attack, n_benign, self.attack_centroids.shape[1])
 
-    # ------------------------------------------------------------------
-    # Embedding
-    # ------------------------------------------------------------------
-
-    def _embed(self, text: str) -> np.ndarray:
+    # embedding helper
+    def _embed(self, text):
         vec = self.model.encode([text], normalize_embeddings=True)
         return vec.astype(np.float32)
 
-    # ------------------------------------------------------------------
-    # Detection
-    # ------------------------------------------------------------------
-
-    def detect(self, text: str) -> LayerBResult:
+    # main detection method
+    def detect(self, text) -> LayerBResult:
         start = time.time()
         input_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
 
         query = self._embed(text)
         top_k = self.settings.layer_b_top_k
 
-        # --- Attack similarity (top-k mean) ---
+        # Attack similarity (top-k mean) 
         k_attack = min(top_k, self.attack_centroids.shape[0])
         atk_scores, atk_ids = self.attack_index.search(query, k_attack)
         atk_scores = atk_scores[0]  # shape (k_attack,)
         atk_ids = atk_ids[0]
         attack_sim = float(np.mean(atk_scores[:k_attack]))
 
-        # --- Benign similarity (top-k mean) ---
+        # Benign similarity (top-k mean) 
         if self.benign_index is not None:
             k_benign = min(top_k, self.benign_centroids.shape[0])#type: ignore
             ben_scores, _ = self.benign_index.search(query, k_benign)
@@ -136,20 +112,25 @@ class SignatureEngine:
         else:
             benign_sim = 0.0
 
-        # --- Contrastive score (attack sim - benign sim) ---
+        # Contrastive score (attack sim - benign sim) 
         contrastive = attack_sim - benign_sim
 
-        # --- Build match objects (informational) ---
+        # Build match objects (informational) 
         matches: List[SignatureMatch] = []
+
         cluster_meta = {c["cluster_id"]: c for c in self.metadata.get("clusters", [])}
+
         for rank, (score, idx) in enumerate(zip(atk_scores, atk_ids)):
             score_f = float(score)
+
             if score_f < 0.20:
                 continue
+
             cid = int(idx)
             meta = cluster_meta.get(cid, {})
             samples = meta.get("sample_prompts", [])
             desc = samples[0][:100] if samples else f"cluster_{cid}"
+            
             matches.append(SignatureMatch(
                 rule_id=f"cluster_{cid}",
                 severity=Severity.MALICIOUS,
@@ -164,7 +145,7 @@ class SignatureEngine:
                 confidence=score_f,
             ))
 
-        # --- Two-threshold decision on mean top-k attack similarity ---
+        #  Two-threshold decision on mean top-k attack similarity 
         # block_threshold / flag_threshold are compared against attack_sim.
         # Contrastive guard: if benign similarity exceeds attack similarity at
         # the block boundary, demote to FLAG to avoid false positives.

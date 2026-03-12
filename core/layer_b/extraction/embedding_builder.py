@@ -26,10 +26,8 @@ from sentence_transformers import SentenceTransformer
 log = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Encoding
-# ---------------------------------------------------------------------------
 
+#Encoding
 def encode_prompts(texts, model_name, batch_size=256):
     """Encode texts into L2-normalised float32 embeddings.
 
@@ -48,16 +46,13 @@ def encode_prompts(texts, model_name, batch_size=256):
     return embeddings, model
 
 
-# ---------------------------------------------------------------------------
-# Clustering
-# ---------------------------------------------------------------------------
-
+#clustering
 def cluster_embeddings(embeddings, n_clusters=64, n_iter=30, use_gpu=True):
     """FAISS GPU k-means on L2-normalised embeddings.
 
     Returns (labels 1-D ndarray, centroids float32 ndarray).
     """
-    n, dim = embeddings.shape
+    _, dim = embeddings.shape
     kmeans = faiss.Kmeans(
         dim,
         n_clusters,
@@ -82,28 +77,33 @@ def cluster_embeddings(embeddings, n_clusters=64, n_iter=30, use_gpu=True):
     return labels, kmeans.centroids.copy().astype(np.float32) #type: ignore
 
 
-# ---------------------------------------------------------------------------
-# Centroid computation + purity + radius
-# ---------------------------------------------------------------------------
-
+#centroid computation
 def build_centroids(embeddings, labels, n_clusters):
     """L2-normalise centroids computed from original embeddings.
 
     Returns dict with centroids, cluster_ids, cluster_sizes.
     """
-    centroids, ids, sizes = [], [], []
+    centroids =[]
+    ids = []
+    sizes = []
+
     for cid in range(n_clusters):
         mask = labels == cid
         count = int(mask.sum())
+
         if count == 0:
             continue
+
         c = np.mean(embeddings[mask], axis=0)
         norm = np.linalg.norm(c)
+
         if norm > 0:
             c = c / norm
+
         centroids.append(c)
         ids.append(cid)
         sizes.append(count)
+
     return {
         "centroids": np.array(centroids, dtype=np.float32),
         "cluster_ids": ids,
@@ -111,13 +111,14 @@ def build_centroids(embeddings, labels, n_clusters):
     }
 
 
-def compute_cluster_purity(attack_labels, attack_embeddings,
+def compute_cluster_purity(attack_labels,
                            benign_embeddings, centroids_array, cluster_ids,
                            proximity_threshold=0.50):
-    """For each attack cluster, measure what fraction of nearby prompts
+    """
+    For each attack cluster, measure what fraction of nearby prompts
     are truly attack text.
 
-    Only benign prompts with cosine similarity >= *proximity_threshold* to
+    Only benign prompts with cosine similarity >= proximity_threshold to
     a centroid are counted — distant benign prompts don't dilute purity.
 
     Returns dict  cluster_id → purity (float 0-1).

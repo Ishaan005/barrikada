@@ -99,7 +99,7 @@ def main():
     purity = compute_cluster_purity(
         attack_labels, attack_embeddings, benign_embeddings,
         attack_centroids, attack_ids,
-        proximity_threshold=settings.layer_b_purity_proximity,
+        proximity_threshold=settings.layer_b_purity_proximity, # type: ignore
     )
     radii = compute_cluster_radii(attack_embeddings, attack_labels,
                                   attack_centroids, attack_ids)
