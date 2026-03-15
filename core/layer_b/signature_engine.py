@@ -24,9 +24,15 @@ class SignatureEngine:
 
     #init
     def _load_model(self):
-        model_name = self.settings.layer_b_embedding_model
+        # Use trained prompt encoder if available, else base model
+        prompt_encoder_path = Path(self.settings.layer_b_signatures_dir) / "prompt_encoder"
+        if prompt_encoder_path.exists():
+            model_name = str(prompt_encoder_path)
+            log.info("Loading trained prompt encoder: %s", prompt_encoder_path)
+        else:
+            model_name = self.settings.layer_b_embedding_model
+            log.info("Loading base embedding model: %s", model_name)
         self.model = SentenceTransformer(model_name)
-        log.info("Loaded embedding model: %s", model_name)
 
     def _load_signatures(self):
         sig = Path(self.settings.layer_b_signatures_dir)
@@ -130,7 +136,7 @@ class SignatureEngine:
             meta = cluster_meta.get(cid, {})
             samples = meta.get("sample_prompts", [])
             desc = samples[0][:100] if samples else f"cluster_{cid}"
-            
+
             matches.append(SignatureMatch(
                 rule_id=f"cluster_{cid}",
                 severity=Severity.MALICIOUS,
@@ -151,18 +157,29 @@ class SignatureEngine:
         # the block boundary, demote to FLAG to avoid false positives.
         block_thr = self.settings.layer_b_block_threshold
         flag_thr = self.settings.layer_b_flag_threshold
+        block_min_margin = self.settings.layer_b_block_min_margin
 
         if attack_sim >= block_thr:
-            # Contrastive guard: only hard-block when attack clearly dominates benign
-            if attack_sim > benign_sim:
+            # Hard block only when attack dominates benign by a minimum margin.
+            if contrastive >= block_min_margin:
                 verdict = "block"
                 confidence = self.settings.layer_b_block_confidence
             else:
                 verdict = "flag"
                 confidence = self.settings.layer_b_flag_confidence
         elif attack_sim >= flag_thr:
-            verdict = "flag"
-            confidence = self.settings.layer_b_flag_confidence
+            # Conservative safe-recovery path for clear benign dominance in the flag band.
+            if (
+                self.settings.layer_b_enable_safe_recovery
+                and attack_sim <= self.settings.layer_b_safe_recovery_max_attack_sim
+                and benign_sim >= self.settings.layer_b_safe_recovery_min_benign_sim
+                and contrastive <= self.settings.layer_b_safe_recovery_max_margin
+            ):
+                verdict = "allow"
+                confidence = self.settings.layer_b_safe_confidence
+            else:
+                verdict = "flag"
+                confidence = self.settings.layer_b_flag_confidence
         else:
             verdict = "allow"
             confidence = self.settings.layer_b_safe_confidence
@@ -175,6 +192,9 @@ class SignatureEngine:
             matches=matches,
             verdict=verdict,
             confidence_score=confidence,
+            attack_similarity=attack_sim,
+            benign_similarity=benign_sim,
+            contrastive_margin=contrastive,
             allowlisted=False,
             allowlist_rules=[],
         )

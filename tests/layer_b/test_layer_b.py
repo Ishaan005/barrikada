@@ -55,6 +55,9 @@ def test_layer_b():
             'layer_b_verdict': layer_b_result.verdict,
             'layer_b_confidence': layer_b_result.confidence_score,
             'layer_b_top_similarity': max((m.confidence for m in layer_b_result.matches), default=0.0),
+            'layer_b_attack_similarity': layer_b_result.attack_similarity,
+            'layer_b_benign_similarity': layer_b_result.benign_similarity,
+            'layer_b_margin': layer_b_result.contrastive_margin,
             'predicted_label': predicted_label,
             'is_correct': is_correct,
             'processing_time_ms': layer_b_result.processing_time_ms,
@@ -159,10 +162,21 @@ def test_layer_b():
     print(f"Std:                  {results_df['layer_b_top_similarity'].std():.4f}")
     blocked = results_df[results_df['layer_b_verdict'] == 'block']
     flagged = results_df[results_df['layer_b_verdict'] == 'flag']
+    allowed = results_df[results_df['layer_b_verdict'] == 'allow']
     if len(blocked) > 0:
         print(f"Blocked avg sim:      {blocked['layer_b_top_similarity'].mean():.4f}")
     if len(flagged) > 0:
         print(f"Flagged avg sim:      {flagged['layer_b_top_similarity'].mean():.4f}")
+    if len(allowed) > 0:
+        print(f"Allowed avg sim:      {allowed['layer_b_top_similarity'].mean():.4f}")
+
+    print("\n" + "="*60)
+    print("CALIBRATION TELEMETRY")
+    print("="*60)
+    print(f"Attack sim mean:      {results_df['layer_b_attack_similarity'].mean():.4f}")
+    print(f"Benign sim mean:      {results_df['layer_b_benign_similarity'].mean():.4f}")
+    print(f"Margin mean:          {results_df['layer_b_margin'].mean():.4f}")
+    print(f"Margin median:        {results_df['layer_b_margin'].median():.4f}")
     
     return output_path
 

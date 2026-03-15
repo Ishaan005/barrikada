@@ -15,6 +15,11 @@ class LayerBResult:
     processing_time_ms: float
     input_hash: str
 
+    # Optional telemetry fields for calibration and analysis
+    attack_similarity: float = 0.0
+    benign_similarity: float = 0.0
+    contrastive_margin: float = 0.0
+
     # Allow-listing metadata (used for early termination / skipping later layers)
     allowlisted: bool = False
     allowlist_rules: List[str] = field(default_factory=list)
@@ -40,6 +45,9 @@ class LayerBResult:
             ],
             'verdict': self.verdict,
             'confidence_score': self.confidence_score,
+            'attack_similarity': self.attack_similarity,
+            'benign_similarity': self.benign_similarity,
+            'contrastive_margin': self.contrastive_margin,
             'allowlisted': self.allowlisted,
             'allowlist_rules': list(self.allowlist_rules),
         }

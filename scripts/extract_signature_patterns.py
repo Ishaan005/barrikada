@@ -50,7 +50,7 @@ def main():
     wall_start = time.perf_counter()
     settings = Settings()
 
-    # ---- Load dataset ----
+    # Load dataset
     texts, labels = load_dataset(DATASET_CSV)
     n_safe = int((labels == 0).sum())
     n_mal = int((labels == 1).sum())
@@ -64,9 +64,15 @@ def main():
     del texts, labels
     gc.collect()
 
-    # ---- Encode ----
-    # Use fine-tuned contrastive model if available, else fall back to base model
-    model_name = settings.layer_b_embedding_model
+    # Choose encoding model
+    # Use trained signature encoder if available, else fall back to base model
+    sig_encoder_path = Path(settings.layer_b_signatures_dir) / "signature_encoder"
+    if sig_encoder_path.exists():
+        model_name = str(sig_encoder_path)
+        log.info("Using trained signature encoder: %s", sig_encoder_path)
+    else:
+        model_name = settings.layer_b_embedding_model
+        log.info("Using base model: %s", model_name)
     log.info("Encoding injection prompts …")
     attack_embeddings, _ = encode_prompts(injection_texts, model_name)
     gc.collect()
@@ -75,7 +81,7 @@ def main():
     benign_embeddings, _ = encode_prompts(benign_texts, model_name)
     gc.collect()
 
-    # ---- Cluster attack prompts ----
+    # Cluster attack prompts
     n_clusters = settings.layer_b_n_clusters
     log.info("Clustering %d attack embeddings (k=%d) …", len(attack_embeddings), n_clusters)
     attack_labels, _ = cluster_embeddings(attack_embeddings, n_clusters=n_clusters)
@@ -86,7 +92,7 @@ def main():
     attack_ids = attack_cdata["cluster_ids"]
     attack_sizes = attack_cdata["cluster_sizes"]
 
-    # ---- Cluster benign prompts ----
+    # Cluster benign prompts
     benign_k = max(16, n_clusters // 2)
     log.info("Clustering %d benign embeddings (k=%d) …", len(benign_embeddings), benign_k)
     benign_labels, _ = cluster_embeddings(benign_embeddings, n_clusters=benign_k)
@@ -95,11 +101,11 @@ def main():
     benign_cdata = build_centroids(benign_embeddings, benign_labels, benign_k)
     benign_centroids = benign_cdata["centroids"]
 
-    # ---- Purity filtering ----
+    # Purity filtering
     purity = compute_cluster_purity(
-        attack_labels, attack_embeddings, benign_embeddings,
+        attack_labels, benign_embeddings,
         attack_centroids, attack_ids,
-        proximity_threshold=settings.layer_b_purity_proximity, # type: ignore
+        proximity_threshold=settings.layer_b_purity_proximity,
     )
     radii = compute_cluster_radii(attack_embeddings, attack_labels,
                                   attack_centroids, attack_ids)
@@ -112,17 +118,17 @@ def main():
     log.info("Final: %d attack centroids, %d benign centroids (dim=%d)",
              len(attack_ids), benign_centroids.shape[0], attack_centroids.shape[1])
 
-    # ---- FAISS indices ----
+    # FAISS indices
     attack_index = build_faiss_index(attack_centroids)
     benign_index = build_faiss_index(benign_centroids)
 
-    # ---- Metadata ----
+    # Metadata
     metadata = collect_metadata(
         attack_ids, attack_sizes, attack_labels, injection_texts,
         model_name, n_clusters, purity, radii,
     )
 
-    # ---- Save ----
+    # Save
     save_artifacts(OUTDIR, attack_centroids, attack_index, metadata,
                    benign_centroids, benign_index, radii)
 

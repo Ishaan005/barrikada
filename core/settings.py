@@ -14,9 +14,16 @@ class Settings(BaseModel):
 
     # Two-threshold decision system (applied to mean top-k attack similarity)
     # Empirically calibrated on barrikada_test.csv (block_prec=0.96, fblk=0.53%)
-    layer_b_block_threshold: float = 0.78   # attack sim above this → BLOCK (with contrastive guard)
-    layer_b_flag_threshold: float = 0.55    # attack sim above this → FLAG
+    layer_b_block_threshold: float = 0.86   # sweep-calibrated conservative block threshold
+    layer_b_flag_threshold: float = 0.62    # sweep-calibrated conservative flag threshold
     # Below flag_threshold → SAFE (allow)
+
+    # Contrastive guardrails for safer Layer B calibration
+    layer_b_block_min_margin: float = 0.08  # require strong attack dominance for hard block
+    layer_b_enable_safe_recovery: bool = True
+    layer_b_safe_recovery_max_attack_sim: float = 0.63
+    layer_b_safe_recovery_min_benign_sim: float = 0.80
+    layer_b_safe_recovery_max_margin: float = -0.10  # allow only when benign clearly dominates
 
     # Top-k similarity aggregation
     layer_b_top_k: int = 5
@@ -30,6 +37,16 @@ class Settings(BaseModel):
     layer_b_block_confidence: float = 0.95
     layer_b_flag_confidence: float = 0.50
     layer_b_safe_confidence: float = 0.10
+
+    # Dual-encoder contrastive training hyperparameters
+    layer_b_dual_encoder_temperature: float = 0.05
+    layer_b_dual_encoder_epochs: int = 3
+    layer_b_dual_encoder_batch_size: int = 8       # small batch, use grad_accum to compensate
+    layer_b_dual_encoder_lr: float = 2e-5
+    layer_b_dual_encoder_hard_negatives: int = 3
+    layer_b_dual_encoder_max_samples: int = 50000
+    layer_b_dual_encoder_grad_accum_steps: int = 8  # effective batch = 8 * 8 = 64
+    layer_b_dual_encoder_use_amp: bool = True       # mixed precision for memory savings
 
     @property
     def layer_b_signatures_dir(self):
