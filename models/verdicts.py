@@ -5,6 +5,7 @@ class DecisionLayer(str, Enum):
     LAYER_A = "A"
     LAYER_B = "B"
     LAYER_C = "C"
+    LAYER_D = "D"
     LAYER_E = "E"
 
 

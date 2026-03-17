@@ -55,8 +55,8 @@ class Settings(BaseModel):
 
     ### Layer C
     # Routing thresholds for Layer C classifier:
-    layer_c_low_threshold: float = 0.25
-    layer_c_high_threshold: float = 0.75
+    layer_c_low_threshold: float = 0.05
+    layer_c_high_threshold: float = 0.95
 
     layer_c_seed: int = 42
 
@@ -68,24 +68,21 @@ class Settings(BaseModel):
 
     # Probability calibration
     layer_c_calibration_method: str = "isotonic"
+    layer_c_calibration_bins: int = 15
 
-    # Threshold tuning constraints
-    layer_c_tune_target_block_precision: float = 0.90
-    layer_c_tune_max_malicious_allow_rate: float = 0.05  # hard cap: malicious texts reaching allow
-    layer_c_tune_max_safe_fpr: float = 0.10          # hard cap: safe texts flagged or blocked
-    layer_c_tune_min_flag_band: float = 0.05
-
-    # Threshold grid search
-    layer_c_tune_low_grid_start: float = 0.10
-    layer_c_tune_low_grid_end: float = 0.50
-    layer_c_tune_high_grid_start: float = 0.50
-    layer_c_tune_high_grid_end: float = 0.99
-    layer_c_tune_grid_steps: int = 200
-
-    # Composite score weights — objective: maximise block_recall, penalise FN (mal→allow) and FP (safe→flag/block)
-    layer_c_tune_w_block_recall: float = 0.5       # reward: malicious texts that are blocked
-    layer_c_tune_w_mal_allow_penalty: float = 0.4  # penalty: malicious texts reaching allow (false negatives)
-    layer_c_tune_w_safe_fpr_penalty: float = 0.3   # penalty: safe texts flagged or blocked (false positives)
+    # XGBoost configuration for Layer C
+    layer_c_xgb_n_estimators: int = 3000
+    layer_c_xgb_max_depth: int = 7
+    layer_c_xgb_learning_rate: float = 0.05
+    layer_c_xgb_subsample: float = 0.8
+    layer_c_xgb_colsample_bytree: float = 0.9
+    layer_c_xgb_scale_pos_multiplier: float = 1.5
+    layer_c_xgb_early_stopping_rounds: int = 150
+    layer_c_xgb_tree_method: str = "hist"
+    layer_c_xgb_reg_alpha: float = 0.1
+    layer_c_xgb_reg_lambda: float = 1.0
+    layer_c_xgb_min_child_weight: int = 5
+    layer_c_xgb_gamma: float = 0.1
 
     @property
     def dataset_path(self):
@@ -94,4 +91,34 @@ class Settings(BaseModel):
     @property
     def model_path(self):
         return str(self._project_root / "core/layer_c" / "outputs" / "classifier.joblib")
+
+    ### Layer D (ModernBERT classifier)
+    layer_d_model_id: str = "answerdotai/ModernBERT-large"
+    layer_d_max_length: int = 512
+    layer_d_num_train_epochs: int = 3
+    layer_d_learning_rate: float = 2e-5
+    layer_d_warmup_ratio: float = 0.06
+    layer_d_weight_decay: float = 0.01
+    layer_d_malicious_class_weight: float = 1.75
+    layer_d_focal_gamma: float = 1.5
+    layer_d_train_batch_size: int = 8
+    layer_d_eval_batch_size: int = 16
+    layer_d_gradient_accumulation_steps: int = 4
+    layer_d_gradient_checkpointing: bool = True
+    layer_d_dataloader_num_workers: int = 4
+    layer_d_use_bf16: bool = True
+    layer_d_use_tf32: bool = True
+    layer_d_split_train: float = 0.80
+    layer_d_split_val: float = 0.10
+    layer_d_split_test: float = 0.10
+    layer_d_low_threshold: float = 0.05
+    layer_d_high_threshold: float = 0.95
+
+    @property
+    def layer_d_output_dir(self):
+        return str(self._project_root / "core" / "layer_d" / "outputs" / "model")
+
+    @property
+    def layer_d_report_path(self):
+        return str(self._project_root / "test_results" / "layer_d_eval_latest.json")
 
