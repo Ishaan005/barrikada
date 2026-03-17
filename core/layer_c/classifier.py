@@ -1,6 +1,6 @@
 import time
 from dataclasses import dataclass
-from typing import List
+from typing import Any
 
 import torch
 import joblib
@@ -32,7 +32,13 @@ class Classifier:
     ):
         _device = "cuda" if torch.cuda.is_available() else "cpu"
         self.encoder = SentenceTransformer(embedding_model, device=_device)
-        self.model = joblib.load(model_path)
+        artifact = joblib.load(model_path)
+
+        self.model: Any = artifact.get("model")
+        self.calibrator: Any = artifact.get("calibrator")
+
+        if self.model is None or not hasattr(self.model, "predict_proba"):
+            raise ValueError("Layer C model artifact does not contain a valid predict_proba model")
 
         self.thresholds = Thresholds(low=low, high=high)
         self.thresholds.validate()
@@ -41,8 +47,9 @@ class Classifier:
         start_time = time.time()
 
         emb = self.encoder.encode([input_text], normalize_embeddings=True)
-        X = emb
-        probability_score = self.model.predict_proba(X)[:, 1][0]
+        probability_score = float(self.model.predict_proba(emb)[:, 1][0])
+        if self.calibrator is not None:
+            probability_score = float(self.calibrator.predict(np.array([probability_score]))[0])
 
         if probability_score < self.thresholds.low:
             verdict = "allow"
@@ -77,4 +84,7 @@ class Classifier:
     def predict_batch(self, texts):
         """Return raw probability scores for a batch of texts."""
         embs = self.encoder.encode(texts, normalize_embeddings=True, show_progress_bar=False)
-        return self.model.predict_proba(embs)[:, 1]
+        probs = self.model.predict_proba(embs)[:, 1]
+        if self.calibrator is not None:
+            probs = self.calibrator.predict(probs)
+        return probs

@@ -2,9 +2,9 @@ from pathlib import Path
 import json
 import joblib
 
-def save(model, model_path):
+def save(artifact, model_path):
     Path(model_path).parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, model_path)
+    joblib.dump(artifact, model_path)
 
 def write_json(path, obj):
     p = Path(path)

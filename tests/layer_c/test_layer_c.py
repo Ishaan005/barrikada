@@ -1,5 +1,4 @@
 import sys
-import json
 from pathlib import Path
 import io
 from contextlib import redirect_stdout
@@ -11,28 +10,20 @@ if str(project_root) not in sys.path:
 from core.layer_c.classifier import Classifier
 from core.layer_a.pipeline import analyze_text
 from core.layer_b.signature_engine import SignatureEngine
+from core.settings import Settings
 import pandas as pd
-import numpy as np
-
-
-REPORT_PATH = project_root / "test_results" / "layer_c_eval_latest.json"
 
 ARTIFACTS = {
     "model_path": "core/layer_c/outputs/classifier.joblib",
 }
 
 
-def load_trained_thresholds():
-    """Load the routing thresholds that were tuned during training."""
-    if REPORT_PATH.exists():
-        report = json.loads(REPORT_PATH.read_text())
-        t = report.get("thresholds", {})
-        low = t.get("low", 0.25)
-        high = t.get("high", 0.75)
-        print(f"Loaded trained thresholds: low={low:.4f}, high={high:.4f}")
-        return low, high
-    print("WARNING: No training report found, using default thresholds")
-    return 0.25, 0.75
+def load_thresholds():
+    settings = Settings()
+    low = float(settings.layer_c_low_threshold)
+    high = float(settings.layer_c_high_threshold)
+    print(f"Using manual thresholds from settings: low={low:.4f}, high={high:.4f}")
+    return low, high
 
 
 def load_test_data(csv_path):
@@ -135,10 +126,10 @@ def test_layer_c():
     test_texts, true_labels = load_test_data("datasets/barrikada_test.csv")
     
     # Filter through Layer A and B
-    flagged_texts, flagged_labels = filter_through_layer_b(test_texts, true_labels)
+    # flagged_texts, flagged_labels = filter_through_layer_b(test_texts, true_labels)
     
-    # Load thresholds from training report 
-    low, high = load_trained_thresholds()
+    # Use manual thresholds from settings.
+    low, high = load_thresholds()
     
     classifier = Classifier(
         **ARTIFACTS,
@@ -147,7 +138,7 @@ def test_layer_c():
     )
     
     # Evaluate with trained thresholds
-    evaluate_classifier(classifier, flagged_texts, flagged_labels)
+    evaluate_classifier(classifier, test_texts, true_labels)
 
 
 if __name__ == "__main__":

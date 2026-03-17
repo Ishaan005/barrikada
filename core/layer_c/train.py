@@ -36,49 +36,59 @@ def main():
         action="store_true",
         help="Disable caching of Layer A+B filtered data",
     )
+    parser.add_argument(
+        "--low",
+        type=float,
+        default=settings.layer_c_low_threshold,
+        help="Manual low threshold for allow/flag boundary",
+    )
+    parser.add_argument(
+        "--high",
+        type=float,
+        default=settings.layer_c_high_threshold,
+        help="Manual high threshold for flag/block boundary",
+    )
 
     args = parser.parse_args()
 
     #train only on samples that would reach Layer C.
     X, y, df = load_data(args.csv, use_cache=not args.no_cache)
-    out = train_eval(X, y)
+    out = train_eval(X, y, low=args.low, high=args.high)
 
-    model = out["model"]
+    artifact = out["artifact"]
     thresholds = out["thresholds"]
     metrics = out["metrics"]
     emb_info = out["embedding_info"]
+    feature_importance_top = out["feature_importance_top"]
 
-    save(model, args.model_out)
+    save(artifact, args.model_out)
     write_json(args.report_out, {
         "thresholds": thresholds,
         "metrics": metrics,
         "embedding_info": emb_info,
+        "feature_importance_top": feature_importance_top,
+        "model_metadata": artifact.get("metadata", {}),
     })
 
     #console output
     print("\n=== Layer C Evaluation ===")
-    tuning = thresholds.get("tuning")
     print(
         "Routing thresholds: "
         f"low={thresholds['low']:.4f}, high={thresholds['high']:.4f} "
     )
-    if tuning:
-        print(
-                "VAL policy metrics: "
-                f"block_precision={tuning.get('val_block_precision')}, "
-                f"block_recall={tuning.get('val_block_recall')}, "
-                f"malicious_allow_rate={tuning.get('val_malicious_allow_rate')}, "
-                f"safe_fpr={tuning.get('val_safe_fpr')}, "
-                f"allow_rate={tuning.get('val_allow_rate')}"
-        )
-    print("VAL (threshold=0.5):\n" + metrics["val"]["report_0.5"])
+    print(f"Threshold source: {thresholds.get('source', 'manual')}")
+    print("VAL (threshold=0.5, calibrated):\n" + metrics["val"]["calibrated"]["report_0.5"])
     print("VAL (routing thresholds):\n" + metrics["val"]["report_routing"])
     print(f"VAL verdict counts: {metrics['val']['routing_verdict_counts']}")
-    print("\nTEST (threshold=0.5):\n" + metrics["test"]["report_0.5"])
+    print("\nTEST (threshold=0.5, calibrated):\n" + metrics["test"]["calibrated"]["report_0.5"])
     print("TEST (routing thresholds):\n" + metrics["test"]["report_routing"])
     print(f"TEST verdict counts: {metrics['test']['routing_verdict_counts']}")
-    print(f"VAL ROC-AUC: {metrics['val']['roc_auc']:.4f}")
-    print(f"TEST ROC-AUC: {metrics['test']['roc_auc']:.4f}")
+    print(f"VAL ROC-AUC (raw): {metrics['val']['raw']['roc_auc']:.4f}")
+    print(f"VAL ROC-AUC (calibrated): {metrics['val']['calibrated']['roc_auc']:.4f}")
+    print(f"TEST ROC-AUC (raw): {metrics['test']['raw']['roc_auc']:.4f}")
+    print(f"TEST ROC-AUC (calibrated): {metrics['test']['calibrated']['roc_auc']:.4f}")
+    print(f"VAL PR-AUC (calibrated): {metrics['val']['calibrated']['pr_auc']:.4f}")
+    print(f"TEST PR-AUC (calibrated): {metrics['test']['calibrated']['pr_auc']:.4f}")
     print(f"Rows used: {len(df)}")
 
     return 0
