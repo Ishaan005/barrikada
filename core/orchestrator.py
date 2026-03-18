@@ -7,8 +7,10 @@ Flow:
     - If unsure (flag) => send to Layer C
 3) Layer C makes the final decision only for unsure cases.
     - If block or allow => final verdict
-    - If flag (uncertain) => escalate to Layer E
-4) Layer E (LLM judge) is the final arbiter for cases that remain
+    - If flag (uncertain) => escalate to Layer D
+4) Layer D makes a second-stage ModernBERT decision for flagged Layer C cases.
+    - If block or allow => continue to Layer E as final arbiter
+5) Layer E (LLM judge) is the final arbiter for cases that remain
    uncertain after all prior layers.
 
 Each layer makes its own decision; we do not aggregate scores.
@@ -29,6 +31,7 @@ class PIPipeline:
         from core.layer_a.pipeline import analyze_text
         from core.layer_b.signature_engine import SignatureEngine
         from core.layer_c.classifier import Classifier
+        from core.layer_d.classifier import LayerDClassifier
         from core.layer_e.llm_judge import LLMJudge
 
         settings = Settings()
@@ -40,6 +43,12 @@ class PIPipeline:
             embedding_model=settings.layer_c_embedding_model,
             low=settings.layer_c_low_threshold,
             high=settings.layer_c_high_threshold,
+        )
+        self.layer_d_classifier = LayerDClassifier(
+            model_dir=settings.layer_d_output_dir,
+            low=settings.layer_d_low_threshold,
+            high=settings.layer_d_high_threshold,
+            max_length=settings.layer_d_max_length,
         )
         self.layer_e_judge = LLMJudge()
 
@@ -53,6 +62,7 @@ class PIPipeline:
         confidence_score: float,
         layer_b_result=None,
         layer_c_result=None,
+        layer_d_result=None,
         layer_e_result_dict=None,
         layer_e_time_ms=None,
     ):
@@ -66,6 +76,8 @@ class PIPipeline:
             layer_b_time_ms=layer_b_result.processing_time_ms if layer_b_result else None,
             layer_c_result=layer_c_result.to_dict() if layer_c_result else None,
             layer_c_time_ms=layer_c_result.processing_time_ms if layer_c_result else None,
+            layer_d_result=layer_d_result.to_dict() if layer_d_result else None,
+            layer_d_time_ms=layer_d_result.processing_time_ms if layer_d_result else None,
             layer_e_result=layer_e_result_dict,
             layer_e_time_ms=layer_e_time_ms,
             final_verdict=final_verdict,
@@ -117,6 +129,9 @@ class PIPipeline:
                 confidence_score=layer_c_result.confidence_score,
             )
     
+        # ----- Layer D -----
+        layer_d_result = self.layer_d_classifier.predict(analysis_text)
+
         # ----- Layer E -----
         layer_e_start = time.time()
         layer_e_result = self.layer_e_judge.call_judge(analysis_text)
@@ -138,6 +153,7 @@ class PIPipeline:
             input_hash, start_time, layer_a_result,
             layer_b_result=layer_b_result,
             layer_c_result=layer_c_result,
+            layer_d_result=layer_d_result,
             layer_e_result_dict=layer_e_result_dict,
             layer_e_time_ms=layer_e_time_ms,
             final_verdict=layer_e_verdict,
