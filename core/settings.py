@@ -66,8 +66,7 @@ class Settings(BaseModel):
     layer_c_embedding_model: str = "all-mpnet-base-v2"
     layer_c_embedding_batch_size: int    = 128
 
-    # Probability calibration
-    layer_c_calibration_method: str = "isotonic"
+    # Probability calibration (fixed to isotonic in training flow)
     layer_c_calibration_bins: int = 15
 
     # XGBoost configuration for Layer C
@@ -83,6 +82,14 @@ class Settings(BaseModel):
     layer_c_xgb_reg_lambda: float = 1.0
     layer_c_xgb_min_child_weight: int = 5
     layer_c_xgb_gamma: float = 0.1
+
+    # Layer C hard-negative mining (train-split SAFE examples near/inside uncertain band)
+    layer_c_hard_negative_use_routing_band: bool = True
+    layer_c_hard_negative_score_min: float = 0.20
+    layer_c_hard_negative_score_max: float = 0.80
+    layer_c_hard_negative_max_samples: int = 5000
+    layer_c_hard_negative_min_samples: int = 32
+    layer_c_hard_negative_augment_multiplier: int = 1
 
     @property
     def dataset_path(self):
@@ -111,8 +118,8 @@ class Settings(BaseModel):
     layer_d_split_train: float = 0.80
     layer_d_split_val: float = 0.10
     layer_d_split_test: float = 0.10
-    layer_d_low_threshold: float = 0.05
-    layer_d_high_threshold: float = 0.95
+    layer_d_low_threshold: float = 0.20
+    layer_d_high_threshold: float = 0.80
 
     @property
     def layer_d_output_dir(self):

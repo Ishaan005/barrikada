@@ -53,7 +53,12 @@ def main():
 
     #train only on samples that would reach Layer C.
     X, y, df = load_data(args.csv, use_cache=not args.no_cache)
-    out = train_eval(X, y, low=args.low, high=args.high)
+    out = train_eval(
+        X,
+        y,
+        low=args.low,
+        high=args.high,
+    )
 
     artifact = out["artifact"]
     thresholds = out["thresholds"]

@@ -34,8 +34,8 @@ class Classifier:
         self.encoder = SentenceTransformer(embedding_model, device=_device)
         artifact = joblib.load(model_path)
 
-        self.model: Any = artifact.get("model")
-        self.calibrator: Any = artifact.get("calibrator")
+        self.model = artifact.get("model")
+        self.calibrator = artifact.get("calibrator")
 
         if self.model is None or not hasattr(self.model, "predict_proba"):
             raise ValueError("Layer C model artifact does not contain a valid predict_proba model")
