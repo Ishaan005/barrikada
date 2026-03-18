@@ -193,3 +193,71 @@ This repository accompanies an academic paper:
 > (Publication pending)
 
 ---
+
+## Model Versioning For Teams
+
+Barrikada supports release-tagged model artifact versioning for Layer C and Layer D.
+
+### Why
+
+- Keep model binaries reproducible across teammates and environments.
+- Avoid implicit "latest local output" behavior.
+- Allow code and model revisions to move together via tags.
+
+### Artifact strategy
+
+- Binary artifacts are stored in Git LFS.
+- Released versions live under:
+    - `core/layer_c/outputs/releases/<version>/`
+    - `core/layer_d/outputs/releases/<version>/`
+- A `LATEST` pointer file is maintained under each releases root.
+
+### Release a Layer C model
+
+```bash
+python core/layer_c/train.py \
+    --csv datasets/barrikada.csv \
+    --model-version v2026.03.18-lc1
+```
+
+This writes:
+- `classifier.joblib`
+- `eval_report.json`
+- `manifest.json`
+- and updates `core/layer_c/outputs/releases/LATEST` (unless `--no-set-latest` is set).
+
+### Release a Layer D model
+
+```bash
+python core/layer_d/train.py \
+    --csv datasets/barrikada.csv \
+    --model-version v2026.03.18-ld1
+```
+
+This writes:
+- `model/` (HF artifacts)
+- `eval_report.json`
+- `manifest.json`
+- and updates `core/layer_d/outputs/releases/LATEST` (unless `--no-set-latest` is set).
+
+### Teammate setup
+
+1. Install Git LFS and clone repo.
+2. Pull model artifacts:
+
+```bash
+git lfs pull --include='core/layer_c/outputs/releases/**,core/layer_d/outputs/releases/**'
+```
+
+3. Verify each release has `manifest.json` and matching checksums.
+4. Run pipeline/tests against the selected model versions.
+
+### Runtime selection
+
+Use settings fields:
+- `layer_c_model_version`: `legacy`, `latest`, or explicit version.
+- `layer_d_model_version`: `legacy`, `latest`, or explicit version.
+
+`legacy` keeps current pre-versioned paths for backward compatibility.
+
+---

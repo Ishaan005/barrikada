@@ -1,3 +1,8 @@
 datasets/barrikada.csv filter=lfs diff=lfs merge=lfs -text
 datasets/barrikada_test.csv filter=lfs diff=lfs merge=lfs -text
 datasets/malignant_processed.csv filter=lfs diff=lfs merge=lfs -text
+
+# Released model artifacts
+core/layer_c/outputs/releases/**/*.joblib filter=lfs diff=lfs merge=lfs -text
+core/layer_d/outputs/releases/**/model/*.safetensors filter=lfs diff=lfs merge=lfs -text
+core/layer_d/outputs/releases/**/model/*.bin filter=lfs diff=lfs merge=lfs -text

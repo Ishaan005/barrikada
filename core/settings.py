@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from pathlib import Path
 
+from core.model_registry import read_latest_pointer
+
 
 class Settings(BaseModel):
     app_name: str = "Barrikada"
@@ -91,13 +93,36 @@ class Settings(BaseModel):
     layer_c_hard_negative_min_samples: int = 32
     layer_c_hard_negative_augment_multiplier: int = 1
 
+    # Layer C model version selection
+    # "legacy" -> core/layer_c/outputs/classifier.joblib
+    # "latest" -> core/layer_c/outputs/releases/LATEST
+    # other value -> core/layer_c/outputs/releases/<version>/classifier.joblib
+    layer_c_model_version: str = "legacy"
+
     @property
     def dataset_path(self):
         return str(self._project_root / "datasets" / "barrikada.csv")
+
+    @property
+    def layer_c_release_dir(self):
+        return str(self._project_root / "core" / "layer_c" / "outputs" / "releases")
+
+    def _resolve_release_version(self, release_dir: Path, version: str):
+        if version == "legacy":
+            return None
+        if version == "latest":
+            return read_latest_pointer(release_dir)
+        return version
     
     @property
     def model_path(self):
-        return str(self._project_root / "core/layer_c" / "outputs" / "classifier.joblib")
+        legacy = self._project_root / "core" / "layer_c" / "outputs" / "classifier.joblib"
+        resolved = self._resolve_release_version(Path(self.layer_c_release_dir), self.layer_c_model_version)
+        if resolved:
+            candidate = Path(self.layer_c_release_dir) / resolved / "classifier.joblib"
+            if candidate.exists():
+                return str(candidate)
+        return str(legacy)
 
     ### Layer D (ModernBERT classifier)
     layer_d_model_id: str = "answerdotai/ModernBERT-large"
@@ -121,9 +146,25 @@ class Settings(BaseModel):
     layer_d_low_threshold: float = 0.20
     layer_d_high_threshold: float = 0.80
 
+    # Layer D model version selection
+    # "legacy" -> core/layer_d/outputs/model
+    # "latest" -> core/layer_d/outputs/releases/LATEST
+    # other value -> core/layer_d/outputs/releases/<version>/model
+    layer_d_model_version: str = "legacy"
+
+    @property
+    def layer_d_release_dir(self):
+        return str(self._project_root / "core" / "layer_d" / "outputs" / "releases")
+
     @property
     def layer_d_output_dir(self):
-        return str(self._project_root / "core" / "layer_d" / "outputs" / "model")
+        legacy = self._project_root / "core" / "layer_d" / "outputs" / "model"
+        resolved = self._resolve_release_version(Path(self.layer_d_release_dir), self.layer_d_model_version)
+        if resolved:
+            candidate = Path(self.layer_d_release_dir) / resolved / "model"
+            if candidate.exists():
+                return str(candidate)
+        return str(legacy)
 
     @property
     def layer_d_report_path(self):
