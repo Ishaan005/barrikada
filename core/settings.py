@@ -146,6 +146,15 @@ class Settings(BaseModel):
     layer_d_low_threshold: float = 0.20
     layer_d_high_threshold: float = 0.80
 
+    # Layer D hard-negative mining (SAFE train-split examples with high malicious scores)
+    layer_d_hard_negative_enabled: bool = False
+    layer_d_hard_negative_use_routing_band: bool = True
+    layer_d_hard_negative_score_min: float = 0.20
+    layer_d_hard_negative_score_max: float = 0.80
+    layer_d_hard_negative_max_samples: int = 5000
+    layer_d_hard_negative_min_samples: int = 32
+    layer_d_hard_negative_augment_multiplier: int = 1
+
     # Layer D model version selection
     # "legacy" -> core/layer_d/outputs/model
     # "latest" -> core/layer_d/outputs/releases/LATEST

@@ -7,3 +7,14 @@ venv
 outputs
 signatures
 .cache
+
+# macOS filesystem metadata
+.DS_Store
+**/.DS_Store
+
+# Python bytecode/cache artifacts (recursive)
+**/__pycache__/
+*.py[cod]
+
+# Local test cache
+.pytest_cache/

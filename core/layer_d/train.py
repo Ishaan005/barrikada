@@ -74,6 +74,7 @@ def main():
         "thresholds": out["thresholds"],
         "metrics": out["metrics"],
         "model_info": out["model_info"],
+        "hard_negative_mining": out.get("hard_negative_mining", {}),
     }
     write_json(args.report_out, report_payload)
 

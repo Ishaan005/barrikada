@@ -1,21 +1,29 @@
 import os
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import torch
-from datasets import Dataset
-from sklearn.metrics import average_precision_score, classification_report, f1_score, roc_auc_score
+from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from transformers import (
     Trainer,
-    AutoModelForSequenceClassification,
     AutoTokenizer,
     DataCollatorWithPadding,
     TrainingArguments,
 )
 
 from core.settings import Settings
+from core.layer_d.utils import (
+    augment_with_hard_negatives,
+    binary_report,
+    load_layer_d_model,
+    make_compute_metrics,
+    pick_hard_negative_indices,
+    predict_scores,
+    route_to_label,
+    tokenize_datasets,
+    verdict_breakdown,
+)
 
 _settings = Settings()
 SEED = _settings.layer_c_seed
@@ -45,119 +53,7 @@ class LayerDTrainer(Trainer):
         return (loss, outputs) if return_outputs else loss
 
 
-def route_to_label(scores: np.ndarray, low: float, high: float):
-    verdict = np.full(scores.shape, "allow")
-    verdict[(scores >= low) & (scores < high)] = "flag"
-    verdict[scores >= high] = "block"
-    predicted_label = (verdict != "allow").astype(int)
-    return verdict, predicted_label
-
-
-def binary_report(y_true, y_pred):
-    return classification_report(y_true, y_pred, digits=4, zero_division=0, output_dict=False)
-
-
-def verdict_breakdown(y_true, verdict):
-    y = np.asarray(y_true).astype(int)
-    v = np.asarray(verdict)
-    out = {
-        "allow": {"0": 0, "1": 0},
-        "flag": {"0": 0, "1": 0},
-        "block": {"0": 0, "1": 0},
-    }
-    for label in (0, 1):
-        for decision in ("allow", "flag", "block"):
-            out[decision][str(label)] = int(np.sum((y == label) & (v == decision)))
-    return out
-
-
-def make_compute_metrics(low: float, high: float):
-    def compute_metrics(eval_pred):
-        logits, labels = eval_pred
-        scores = torch.softmax(torch.tensor(logits), dim=-1)[:, 1].numpy()
-        labels_arr = np.asarray(labels).astype(int)
-        preds = (scores >= 0.5).astype(int)
-
-        tp = int(np.sum((preds == 1) & (labels_arr == 1)))
-        fp = int(np.sum((preds == 1) & (labels_arr == 0)))
-        fn = int(np.sum((preds == 0) & (labels_arr == 1)))
-
-        precision = tp / max(1, (tp + fp))
-        recall = tp / max(1, (tp + fn))
-        f1 = 2 * precision * recall / max(1e-12, precision + recall)
-        acc = float(np.mean(preds == labels_arr))
-
-        verdict, routed = route_to_label(scores, low=low, high=high)
-        routed_tp = int(np.sum((routed == 1) & (labels_arr == 1)))
-        routed_fp = int(np.sum((routed == 1) & (labels_arr == 0)))
-        routed_fn = int(np.sum((routed == 0) & (labels_arr == 1)))
-        routed_precision = routed_tp / max(1, routed_tp + routed_fp)
-        routed_recall = routed_tp / max(1, routed_tp + routed_fn)
-        routed_f1 = 2 * routed_precision * routed_recall / max(1e-12, routed_precision + routed_recall)
-        safe_fpr = float(np.mean((verdict != "allow") & (labels_arr == 0)))
-        mal_allow = float(np.mean((verdict == "allow") & (labels_arr == 1)) / max(1e-12, np.mean(labels_arr == 1)))
-
-        metrics = {
-            "accuracy": acc,
-            "precision": float(precision),
-            "recall": float(recall),
-            "f1": float(f1),
-            "pr_auc": float(average_precision_score(labels_arr, scores)),
-            "routing_precision": float(routed_precision),
-            "routing_recall": float(routed_recall),
-            "routing_f1": float(routed_f1),
-            "routing_safe_fpr": safe_fpr,
-            "routing_malicious_allow_rate": mal_allow,
-            "routing_low": float(low),
-            "routing_high": float(high),
-            "security_score": float(routed_f1 - (0.5 * mal_allow) - (0.25 * safe_fpr)),
-        }
-
-        try:
-            metrics["roc_auc"] = float(roc_auc_score(labels_arr, scores))
-        except ValueError:
-            pass
-        return metrics
-
-    return compute_metrics
-
-
-def tokenize_datasets(tokenizer, train_df, val_df, test_df, max_length: int):
-    train_ds = Dataset.from_pandas(train_df, preserve_index=False)
-    val_ds = Dataset.from_pandas(val_df, preserve_index=False)
-    test_ds = Dataset.from_pandas(test_df, preserve_index=False)
-
-    def tokenize(batch):
-        return tokenizer(
-            batch["text"],
-            truncation=True,
-            max_length=max_length,
-            padding=False,
-        )
-
-    train_ds = train_ds.map(tokenize, batched=True, num_proc=4)
-    val_ds = val_ds.map(tokenize, batched=True, num_proc=4)
-    test_ds = test_ds.map(tokenize, batched=True, num_proc=4)
-
-    train_ds = train_ds.rename_column("label", "labels")
-    val_ds = val_ds.rename_column("label", "labels")
-    test_ds = test_ds.rename_column("label", "labels")
-
-    train_ds.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
-    val_ds.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
-    test_ds.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
-
-    return train_ds, val_ds, test_ds
-
-
-def predict_scores(trainer: Trainer, ds) -> np.ndarray:
-    pred = trainer.predict(ds)
-    logits = pred.predictions
-    probs = torch.softmax(torch.tensor(logits), dim=-1)[:, 1].numpy()
-    return probs
-
-
-def train_eval(X, y, model_out_dir: str, low=None, high=None):
+def train_eval(X, y, model_out_dir, low=None, high=None):
     s = _settings
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
@@ -202,19 +98,7 @@ def train_eval(X, y, model_out_dir: str, low=None, high=None):
     if torch.cuda.is_available() and s.layer_d_use_bf16:
         model_kwargs["torch_dtype"] = torch.bfloat16
 
-    try:
-        print("Loading Layer D ModernBERT with flash_attention_2 ...")
-        model = AutoModelForSequenceClassification.from_pretrained(
-            s.layer_d_model_id,
-            attn_implementation="flash_attention_2",
-            **model_kwargs,
-        )
-    except Exception:
-        print("flash_attention_2 unavailable; loading default attention ...")
-        model = AutoModelForSequenceClassification.from_pretrained(
-            s.layer_d_model_id,
-            **model_kwargs,
-        )
+    model = load_layer_d_model(s, model_kwargs)
 
     if torch.cuda.is_available() and s.layer_d_use_tf32:
         torch.backends.cuda.matmul.allow_tf32 = True
@@ -227,6 +111,7 @@ def train_eval(X, y, model_out_dir: str, low=None, high=None):
 
     training_args = TrainingArguments(
         output_dir=str(output_dir),
+        overwrite_output_dir=True,
         num_train_epochs=s.layer_d_num_train_epochs,
         learning_rate=s.layer_d_learning_rate,
         lr_scheduler_type="cosine",
@@ -256,19 +141,88 @@ def train_eval(X, y, model_out_dir: str, low=None, high=None):
         dtype=torch.float32,
     )
 
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer, pad_to_multiple_of=8)
+
     trainer = LayerDTrainer(
         model=model,
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        data_collator=DataCollatorWithPadding(tokenizer=tokenizer, pad_to_multiple_of=8),
+        data_collator=data_collator,
         compute_metrics=make_compute_metrics(low_threshold, high_threshold),
         class_weights=class_weights,
         focal_gamma=s.layer_d_focal_gamma,
     )
 
-    print("Training Layer D ModernBERT ...")
+    print("Training Layer D ModernBERT (stage 1) ...")
     trainer.train()
+
+    hard_negative_meta = {
+        "enabled": bool(s.layer_d_hard_negative_enabled),
+        "stage2_ran": False,
+        "used_routing_band": bool(s.layer_d_hard_negative_use_routing_band),
+        "mine_band_min": None,
+        "mine_band_max": None,
+        "mined_count": 0,
+        "min_samples": int(s.layer_d_hard_negative_min_samples),
+        "max_samples": int(s.layer_d_hard_negative_max_samples),
+        "augment_multiplier": int(s.layer_d_hard_negative_augment_multiplier),
+        "train_rows_before": int(len(train_df)),
+        "train_rows_after": int(len(train_df)),
+    }
+
+    if s.layer_d_hard_negative_enabled:
+        print("Mining Layer D hard negatives from stage-1 train scores ...")
+        train_scores = predict_scores(trainer, train_ds)
+        hard_idx, mine_min, mine_max = pick_hard_negative_indices(
+            y_train=y_train,
+            train_scores=train_scores,
+            low=low_threshold,
+            high=high_threshold,
+            use_routing_band=s.layer_d_hard_negative_use_routing_band,
+            score_min=s.layer_d_hard_negative_score_min,
+            score_max=s.layer_d_hard_negative_score_max,
+            max_samples=s.layer_d_hard_negative_max_samples,
+        )
+
+        hard_negative_meta["mine_band_min"] = float(mine_min)
+        hard_negative_meta["mine_band_max"] = float(mine_max)
+        hard_negative_meta["mined_count"] = int(hard_idx.size)
+
+        min_samples = max(0, int(s.layer_d_hard_negative_min_samples))
+        if hard_idx.size >= min_samples and int(s.layer_d_hard_negative_augment_multiplier) > 0:
+            print(f"Retraining Layer D with {hard_idx.size} hard negatives (stage 2) ...")
+            train_df_aug, extra_rows = augment_with_hard_negatives(
+                train_df,
+                hard_idx,
+                multiplier=int(s.layer_d_hard_negative_augment_multiplier),
+            )
+            hard_negative_meta["train_rows_after"] = int(len(train_df_aug))
+
+            train_ds_aug, _, _ = tokenize_datasets(
+                tokenizer,
+                train_df_aug,
+                val_df,
+                test_df,
+                max_length=s.layer_d_max_length,
+            )
+
+            model = load_layer_d_model(s, model_kwargs)
+            trainer = LayerDTrainer(
+                model=model,
+                args=training_args,
+                train_dataset=train_ds_aug,
+                eval_dataset=val_ds,
+                data_collator=data_collator,
+                compute_metrics=make_compute_metrics(low_threshold, high_threshold),
+                class_weights=class_weights,
+                focal_gamma=s.layer_d_focal_gamma,
+            )
+            trainer.train()
+            hard_negative_meta["stage2_ran"] = True
+            hard_negative_meta["augmented_rows_added"] = int(extra_rows)
+        else:
+            print("Skipping stage 2 hard-negative retraining (not enough mined samples or multiplier <= 0).")
 
     print(f"Saving model artifacts to {output_dir} ...")
     trainer.save_model(str(output_dir))
@@ -305,6 +259,7 @@ def train_eval(X, y, model_out_dir: str, low=None, high=None):
             "model_id": s.layer_d_model_id,
             "max_length": s.layer_d_max_length,
         },
+        "hard_negative_mining": hard_negative_meta,
         "metrics": {
             "val": {
                 "roc_auc": float(roc_auc_score(y_val, val_scores)),
