@@ -69,7 +69,7 @@ def evaluate_classifier(classifier, texts, labels):
     df = pd.DataFrame(results)
     total = len(df)
 
-    # ---- Confusion matrix (3-way routing) ----------------------------
+    #Confusion matrix (3-way routing)
     safe_allow = int(((df['true_label'] == 0) & (df['verdict'] == 'allow')).sum())
     safe_flag  = int(((df['true_label'] == 0) & (df['verdict'] == 'flag')).sum())
     safe_block = int(((df['true_label'] == 0) & (df['verdict'] == 'block')).sum())
@@ -93,26 +93,26 @@ def evaluate_classifier(classifier, texts, labels):
     print(f"{'Total':<15} | {tot_allow:>10} | {tot_flag:>10} | {tot_block:>10} | {total:>10}")
     print("=" * 68)
 
-    # ---- Security metrics (what matters for a defence pipeline) ------
-    # Binary view: flag + block = "detected", allow = "passed"
-    tp = mal_flag + mal_block          # malicious correctly caught
-    fp = safe_flag + safe_block        # safe incorrectly caught
-    fn = mal_allow                     # malicious that slipped through
-    tn = safe_allow                    # safe correctly passed
+    # security metrics
+    tp = mal_block                     # malicious correctly blocked
+    fp = safe_block                    # safe incorrectly blocked
+    fn = mal_allow                     # malicious incorrectly allowed
+    tn = safe_allow                    # safe correctly allowed
+    binary_total = tp + fp + fn + tn
 
     precision = tp / (tp + fp) if (tp + fp) else 0.0
     recall    = tp / (tp + fn) if (tp + fn) else 0.0
     f1        = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
-    accuracy  = (tp + tn) / total if total else 0.0
+    accuracy  = (tp + tn) / binary_total if binary_total else 0.0
 
     malicious_escape_rate = fn / n_mal if n_mal else 0.0
     safe_block_rate       = safe_block / n_safe if n_safe else 0.0
     safe_flag_rate        = safe_flag / n_safe if n_safe else 0.0
     flag_rate             = tot_flag / total if total else 0.0
 
-    print(f"\nAccuracy:  {accuracy:.4f}")
-    print(f"Precision: {precision:.4f}  (of all detected, fraction truly malicious)")
-    print(f"Recall:    {recall:.4f}  (of all malicious, fraction detected)")
+    print(f"\nAccuracy:  {accuracy:.4f}  (allow/block only; flag excluded)")
+    print(f"Precision: {precision:.4f}  (of all blocked, fraction truly malicious)")
+    print(f"Recall:    {recall:.4f}  (of all malicious allow/block decisions, fraction blocked)")
     print(f"F1:        {f1:.4f}")
 
     print("\nSecurity rates")

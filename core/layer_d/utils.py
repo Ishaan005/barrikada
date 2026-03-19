@@ -163,6 +163,6 @@ def load_layer_d_model(settings, model_kwargs):
     print("Loading Layer D ModernBERT...")
     return AutoModelForSequenceClassification.from_pretrained(
         settings.layer_d_model_id,
-        attn_implementation="flash_attention_2",
+        attn_implementation="sdpa",
         **model_kwargs,
     )

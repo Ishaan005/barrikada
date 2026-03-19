@@ -111,7 +111,7 @@ def train_eval(X, y, model_out_dir, low=None, high=None):
 
     training_args = TrainingArguments(
         output_dir=str(output_dir),
-        overwrite_output_dir=True,
+        #overwrite_output_dir=True,
         num_train_epochs=s.layer_d_num_train_epochs,
         learning_rate=s.layer_d_learning_rate,
         lr_scheduler_type="cosine",
