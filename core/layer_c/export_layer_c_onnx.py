@@ -20,9 +20,11 @@ Usage:
     python core/layer_c/export_layer_c_onnx.py
     python core/layer_c/export_layer_c_onnx.py --src core/layer_c/outputs/classifier.joblib
 """
+
 import argparse
 import sys
 from pathlib import Path
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -57,9 +59,10 @@ def main():
     print(f"Dest:   {dst}")
     print()
 
-    import joblib
-    import onnxmltools
-    from onnxmltools.convert.common.data_types import FloatTensorType
+    # Export-only dependencies are intentionally loaded after CLI validation.
+    import joblib  # noqa: PLC0415
+    import onnxmltools  # noqa: PLC0415
+    from onnxmltools.convert.common.data_types import FloatTensorType  # noqa: PLC0415
 
     print("Loading XGBoost classifier from joblib...")
     artifact = joblib.load(src)
@@ -101,9 +104,13 @@ def main():
     cal_size = calibrator_path.stat().st_size
     print()
     print("--- Result ---")
-    print(f"joblib size:     {src_size / 1024 / 1024:>8.2f} MB  (classifier.joblib, includes xgboost model)")
+    print(
+        f"joblib size:     {src_size / 1024 / 1024:>8.2f} MB  (classifier.joblib, includes xgboost model)"
+    )
     print(f"ONNX size:       {dst_size / 1024 / 1024:>8.2f} MB  (classifier.onnx)")
-    print(f"Calibrator size: {cal_size / 1024 / 1024:>8.2f} MB  (calibrator.joblib, no xgboost dep)")
+    print(
+        f"Calibrator size: {cal_size / 1024 / 1024:>8.2f} MB  (calibrator.joblib, no xgboost dep)"
+    )
 
 
 if __name__ == "__main__":

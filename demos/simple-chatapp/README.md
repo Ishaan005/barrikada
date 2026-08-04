@@ -1,8 +1,8 @@
-# Barrikada Open Day Demo
+# Barrikade Open Day Demo
 
 This demo showcases live attack-vs-defense behavior:
 
-- WITH BARRIKADA: layered pipeline verdict and explanation (always runs on Analyze)
+- WITH BARRIKADE: layered pipeline verdict and explanation (always runs on Analyze)
 - WITHOUT SECURITY: optional direct model output from the local Layer E model (runs only when clicked)
 
 ## Run
@@ -23,6 +23,6 @@ If required artifacts are missing, point the demo at `core/models/layer_e/qwen3g
 ## Open Day flow
 
 1. Click one of the attack presets.
-2. Click Analyze to run the prompt through Barrikada.
+2. Click Analyze to run the prompt through Barrikade.
 3. Optionally click Run Base LLM (without security) for comparison.
 4. Open layer tabs to explain where and why the verdict was made.

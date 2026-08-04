@@ -1,8 +1,9 @@
-"""Load the Barrikada dataset for signature extraction."""
+"""Load the Barrikade dataset for signature extraction."""
+
 import logging
-from pathlib import Path
 
 import pandas as pd
+
 
 log = logging.getLogger(__name__)
 

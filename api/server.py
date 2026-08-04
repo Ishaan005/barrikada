@@ -7,22 +7,24 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from core.__version__ import __version__
 from core.orchestrator import PIPipeline
 from core.session import SessionNotActiveError
 from core.session_orchestrator import SessionOrchestrator, create_session_orchestrator
 from core.session_settings import SessionSettings
 from core.settings import Settings
 from models.verdicts import InputProvenance
-from core.__version__ import __version__
+
 
 # Configure logging at startup so that internal core.artifacts and other
 # module loggers have a default stream handler configured and print progress to stdout.
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler()]
+    handlers=[logging.StreamHandler()],
 )
 log = logging.getLogger(__name__)
+
 
 @dataclass
 class AppState:
@@ -118,7 +120,7 @@ async def lifespan(_: FastAPI):
     try:
         state.pipeline = PIPipeline()
         state.startup_error = None
-        log.info("Barrikada pipeline initialized")
+        log.info("Barrikade pipeline initialized")
 
         # Initialise the session orchestrator, reusing the pipeline
         try:
@@ -127,7 +129,7 @@ async def lifespan(_: FastAPI):
                 settings=session_settings,
                 pipeline=state.pipeline,
             )
-            log.info("Barrikada session orchestrator initialized")
+            log.info("Barrikade session orchestrator initialized")
         except Exception as exc:
             log.warning(
                 "Session orchestrator initialization failed (stateless "
@@ -140,7 +142,7 @@ async def lifespan(_: FastAPI):
         state.pipeline = None
         state.session_orchestrator = None
         state.startup_error = str(exc)
-        log.exception("Failed to initialize Barrikada pipeline")
+        log.exception("Failed to initialize Barrikade pipeline")
     yield
 
 

@@ -5,16 +5,17 @@ All layer result classes should follow this pattern.
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import Dict, Any
+from typing import Any
+
 
 class LayerResult(ABC, Mapping):
     """Abstract base class for layer results"""
-    
+
     @abstractmethod
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert result to dictionary for serialization"""
         pass
-    
+
     @abstractmethod
     def get_risk_score(self) -> float:
         """
@@ -22,22 +23,22 @@ class LayerResult(ABC, Mapping):
         Used by orchestrator for final risk aggregation
         """
         pass
-    
+
     def __getattr__(self, name: str) -> Any:
         """Dynamic attribute access for backward compatibility and interface enforcement."""
-        if name == 'verdict':
+        if name == "verdict":
             try:
-                return self.to_dict().get('verdict', 'allow')
+                return self.to_dict().get("verdict", "allow")
             except Exception:
-                return 'allow'
-        elif name == 'processing_time_ms':
+                return "allow"
+        elif name == "processing_time_ms":
             try:
-                return float(self.to_dict().get('processing_time_ms', 0.0))
+                return float(self.to_dict().get("processing_time_ms", 0.0))
             except Exception:
                 return 0.0
-        elif name == 'confidence_score':
+        elif name == "confidence_score":
             try:
-                return float(self.to_dict().get('confidence_score', 1.0))
+                return float(self.to_dict().get("confidence_score", 1.0))
             except Exception:
                 return 1.0
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")

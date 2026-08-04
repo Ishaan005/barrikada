@@ -26,10 +26,12 @@ Usage:
     python core/layer_b/export_layer_b_onnx.py
     python core/layer_b/export_layer_b_onnx.py --src core/layer_b/signatures/embeddings/prompt_encoder
 """
+
 import argparse
 import sys
 import time
 from pathlib import Path
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,22 +47,14 @@ def main():
     parser.add_argument(
         "--src",
         default=str(
-            PROJECT_ROOT
-            / "core"
-            / "layer_b"
-            / "signatures"
-            / "embeddings"
-            / "prompt_encoder"
+            PROJECT_ROOT / "core" / "layer_b" / "signatures" / "embeddings" / "prompt_encoder"
         ),
         help="Path to the PT prompt_encoder directory",
     )
     parser.add_argument(
         "--dst",
         default=None,
-        help=(
-            "Path for the ONNX-converted bundle "
-            "(default: <src parent>/prompt_encoder_onnx)"
-        ),
+        help=("Path for the ONNX-converted bundle (default: <src parent>/prompt_encoder_onnx)"),
     )
     args = parser.parse_args()
 
@@ -74,7 +68,8 @@ def main():
     print(f"Dest (ONNX): {dst}")
     print()
 
-    from sentence_transformers import SentenceTransformer
+    # Keep the heavyweight exporter dependency out of CLI help and validation paths.
+    from sentence_transformers import SentenceTransformer  # noqa: PLC0415
 
     print("Loading prompt_encoder with backend='onnx' (triggers PT->ONNX conversion)...")
     t0 = time.time()

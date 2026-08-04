@@ -1,22 +1,21 @@
-import os
-import pytest
-
-if os.getenv("BARRIKADA_AUTO_DOWNLOAD_ARTIFACTS", "1") == "0":
-    pytest.skip("Auto-download disabled for tests.", allow_module_level=True)
-
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from core.orchestrator import PIPipeline
+
+
+if os.getenv("BARRIKADA_AUTO_DOWNLOAD_ARTIFACTS", "1") == "0":
+    pytest.skip("Auto-download disabled for tests.", allow_module_level=True)
 
 project_root = Path(__file__).resolve().parents[2]
 
 
 def run_full_pipeline_pass():
-    import os
     df = pd.read_csv(project_root / "datasets" / "barrikade_test.csv")
     if not os.getenv("BARRIKADE_TEST_FULL_DATASET"):
         df = df.head(5)
@@ -24,7 +23,7 @@ def run_full_pipeline_pass():
     results = []
 
     for idx, row in df.iterrows():
-        if idx % 200 == 0: #type: ignore 
+        if idx % 200 == 0:  # type: ignore
             print(f"Processed {idx}/{len(df)}...")
         outcome = pipeline.detect(row["text"])
         results.append(
@@ -51,10 +50,15 @@ def run_full_pipeline_pass():
     summary_path = result_dir / f"pipeline_full_pass_summary_{ts}.json"
     results_df.to_csv(csv_path, index=False)
 
-    correct = int((
-        ((results_df["true_label"] == 0) & (results_df["final_verdict"] == "allow"))
-        | ((results_df["true_label"] == 1) & (results_df["final_verdict"].isin(["block", "flag"])))
-    ).sum())
+    correct = int(
+        (
+            ((results_df["true_label"] == 0) & (results_df["final_verdict"] == "allow"))
+            | (
+                (results_df["true_label"] == 1)
+                & (results_df["final_verdict"].isin(["block", "flag"]))
+            )
+        ).sum()
+    )
     summary = {
         "total_samples": len(results_df),
         "correct_predictions": correct,
@@ -69,13 +73,12 @@ def run_full_pipeline_pass():
     print(f"Saved summary to {summary_path}")
     return summary
 
-import pytest
 
 @pytest.mark.slow
 def test_pipeline_full_pass():
     summary = run_full_pipeline_pass()
     assert summary["total_samples"] > 0
 
+
 if __name__ == "__main__":
     run_full_pipeline_pass()
-

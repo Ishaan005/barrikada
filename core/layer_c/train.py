@@ -1,17 +1,15 @@
 import argparse
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Allow running as a script: `python core/layer_c/train.py`
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from core.settings import Settings
 from core.layer_c.train.load_data import load_data
-from core.layer_c.train.utils import save, write_json
 from core.layer_c.train.train_eval import train_eval
+from core.layer_c.train.utils import save, write_json
+from core.settings import Settings
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 
 def main():
     settings = Settings()
@@ -62,7 +60,7 @@ def main():
 
     args = parser.parse_args()
 
-    #train only on samples that would reach Layer C.
+    # train only on samples that would reach Layer C.
     X, y, df = load_data(args.csv, use_cache=not args.no_cache)
     out = train_eval(
         X,
@@ -126,12 +124,9 @@ def main():
         print(f"Released Layer C model version: {args.model_version}")
         print(f"Release manifest: {manifest_path}")
 
-    #console output
+    # console output
     print("\n=== Layer C Evaluation ===")
-    print(
-        "Routing thresholds: "
-        f"low={thresholds['low']:.4f}, high={thresholds['high']:.4f} "
-    )
+    print(f"Routing thresholds: low={thresholds['low']:.4f}, high={thresholds['high']:.4f} ")
     print(f"Threshold source: {thresholds.get('source', 'manual')}")
     print("VAL (threshold=0.5, calibrated):\n" + metrics["val"]["calibrated"]["report_0.5"])
     print("VAL (routing thresholds):\n" + metrics["val"]["report_routing"])

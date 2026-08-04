@@ -13,7 +13,8 @@ Please read and follow the full details inside:
 ### Python Style & Formatting
 - **Formatter**: PEP-8 aligned via Ruff.
 - **Line Length**: Exactly **100 characters**.
-- **Imports**: Strict top-level imports only (no function-local imports).
+- **Imports**: Use module-scope imports by default; document and narrowly suppress intentional
+  lazy, optional, initialization-order, or circular-dependency exceptions.
 - **Private Imports**: Do NOT import private names (symbols with leading underscores) from other modules.
 - **Type Hints**: Use modern Python 3.10+ syntax (`list[X]`, `dict[K, V]`, `X | Y`) instead of the old `typing` module wrappers.
 

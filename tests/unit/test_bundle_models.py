@@ -14,14 +14,13 @@ sentence-transformer (only prompt_encoder is loaded by
 core/layer_b/signature_engine.py) and the extracted/*.yar pattern files
 (no .yar references in any core/*.py).
 """
-import sys
+
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
 from scripts.bundling.bundle_models import LAYER_CONFIGS, get_model_files
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_layer_c_pattern_excludes_dead_weight(tmp_path):

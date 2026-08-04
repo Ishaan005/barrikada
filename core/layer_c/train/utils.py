@@ -1,5 +1,5 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -12,9 +12,11 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+
 def save(artifact, model_path):
     Path(model_path).parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(artifact, model_path)
+
 
 def write_json(path, obj):
     p = Path(path)
@@ -46,6 +48,7 @@ def verdict_breakdown(y_true, verdict):
         for decision in ("allow", "flag", "block"):
             out[decision][str(label)] = int(np.sum((y == label) & (v == decision)))
     return out
+
 
 def calibration_metrics(y_true, y_prob, bins):
     y = np.asarray(y_true).astype(int)
@@ -128,11 +131,22 @@ def top_feature_importance(model, top_n=20):
     ]
 
 
-def pick_hard_negative_indices(y_train, train_scores, low, high, use_routing_band, score_min, score_max, max_samples, ):
+def pick_hard_negative_indices(
+    y_train,
+    train_scores,
+    low,
+    high,
+    use_routing_band,
+    score_min,
+    score_max,
+    max_samples,
+):
     y = np.asarray(y_train).astype(int)
     scores = np.asarray(train_scores, dtype=float)
 
-    mine_min, mine_max = (float(low), float(high)) if use_routing_band else (float(score_min), float(score_max))
+    mine_min, mine_max = (
+        (float(low), float(high)) if use_routing_band else (float(score_min), float(score_max))
+    )
     if mine_min > mine_max:
         mine_min, mine_max = mine_max, mine_min
 

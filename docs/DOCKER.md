@@ -1,6 +1,6 @@
 # Docker Deployment
 
-This repository ships an API-first production container for Barrikada detection.
+This repository ships an API-first production container for Barrikade detection.
 
 ## What Runs in Container
 

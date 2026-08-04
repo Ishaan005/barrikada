@@ -23,11 +23,11 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+
 log = logging.getLogger(__name__)
 
 
-
-#Encoding
+# Encoding
 def encode_prompts(texts, model_name, batch_size=256):
     """Encode texts into L2-normalised float32 embeddings.
 
@@ -35,7 +35,10 @@ def encode_prompts(texts, model_name, batch_size=256):
     """
     model = SentenceTransformer(model_name)
     embeddings = model.encode(
-        texts, batch_size=batch_size, show_progress_bar=True, normalize_embeddings=True,
+        texts,
+        batch_size=batch_size,
+        show_progress_bar=True,
+        normalize_embeddings=True,
     )
     embeddings = embeddings.astype(np.float32)
     # Belt-and-suspenders: ensure unit-length
@@ -46,7 +49,7 @@ def encode_prompts(texts, model_name, batch_size=256):
     return embeddings, model
 
 
-#clustering
+# clustering
 def cluster_embeddings(embeddings, n_clusters=64, n_iter=30, use_gpu=True):
     """FAISS GPU k-means on L2-normalised embeddings.
 
@@ -62,28 +65,29 @@ def cluster_embeddings(embeddings, n_clusters=64, n_iter=30, use_gpu=True):
         spherical=True,
     )
     kmeans.train(embeddings.astype(np.float32))
-    _, labels = kmeans.index.search(embeddings.astype(np.float32), 1) #type: ignore
+    _, labels = kmeans.index.search(embeddings.astype(np.float32), 1)  # type: ignore
     labels = labels.ravel()
 
     sizes = np.bincount(labels, minlength=n_clusters)
     non_empty = int((sizes > 0).sum())
     log.info(
         "K-means: k=%d, %d non-empty, min/med/max size = %d/%d/%d",
-        n_clusters, non_empty,
+        n_clusters,
+        non_empty,
         int(sizes[sizes > 0].min()),
         int(np.median(sizes[sizes > 0])),
         int(sizes.max()),
     )
-    return labels, kmeans.centroids.copy().astype(np.float32) #type: ignore
+    return labels, kmeans.centroids.copy().astype(np.float32)  # type: ignore
 
 
-#centroid computation
+# centroid computation
 def build_centroids(embeddings, labels, n_clusters):
     """L2-normalise centroids computed from original embeddings.
 
     Returns dict with centroids, cluster_ids, cluster_sizes.
     """
-    centroids =[]
+    centroids = []
     ids = []
     sizes = []
 
@@ -111,7 +115,9 @@ def build_centroids(embeddings, labels, n_clusters):
     }
 
 
-def compute_cluster_purity(attack_labels, benign_embeddings, centroids_array, cluster_ids, proximity_threshold=0.50):
+def compute_cluster_purity(
+    attack_labels, benign_embeddings, centroids_array, cluster_ids, proximity_threshold=0.50
+):
     """
     For each attack cluster, measure what fraction of nearby prompts
     are truly attack text.
@@ -127,10 +133,10 @@ def compute_cluster_purity(attack_labels, benign_embeddings, centroids_array, cl
     # Build temp index from attack centroids
     dim = centroids_array.shape[1]
     idx = faiss.IndexFlatIP(dim)
-    idx.add(centroids_array) #type: ignore
+    idx.add(centroids_array)  # type: ignore
 
     # For each benign prompt, find its nearest attack centroid + similarity
-    ben_scores, ben_assigned = idx.search(benign_embeddings.astype(np.float32), 1) #type: ignore
+    ben_scores, ben_assigned = idx.search(benign_embeddings.astype(np.float32), 1)  # type: ignore
     ben_scores = ben_scores.ravel()
     ben_assigned = ben_assigned.ravel()
 
@@ -162,7 +168,9 @@ def compute_cluster_radii(embeddings, labels, centroids_array, cluster_ids):
     return radii
 
 
-def filter_clusters_by_purity(centroids_array, cluster_ids, cluster_sizes, purity, radii, min_purity=0.90):
+def filter_clusters_by_purity(
+    centroids_array, cluster_ids, cluster_sizes, purity, radii, min_purity=0.90
+):
     """Remove clusters below the purity threshold.
 
     Returns filtered (centroids, cluster_ids, cluster_sizes, radii).
@@ -170,8 +178,12 @@ def filter_clusters_by_purity(centroids_array, cluster_ids, cluster_sizes, purit
     keep = [i for i, cid in enumerate(cluster_ids) if purity.get(cid, 0) >= min_purity]
     removed = len(cluster_ids) - len(keep)
     if removed:
-        log.info("Purity filtering: removed %d/%d clusters (purity < %.2f)",
-                 removed, len(cluster_ids), min_purity)
+        log.info(
+            "Purity filtering: removed %d/%d clusters (purity < %.2f)",
+            removed,
+            len(cluster_ids),
+            min_purity,
+        )
     return (
         centroids_array[keep],
         [cluster_ids[i] for i in keep],
@@ -184,11 +196,12 @@ def filter_clusters_by_purity(centroids_array, cluster_ids, cluster_sizes, purit
 # FAISS index
 # ---------------------------------------------------------------------------
 
+
 def build_faiss_index(centroids):
     """IndexFlatIP over L2-normalised centroids (inner product == cosine)."""
     dim = centroids.shape[1]
     index = faiss.IndexFlatIP(dim)
-    index.add(centroids) #type: ignore
+    index.add(centroids)  # type: ignore
     log.info("FAISS index: %d vectors, dim=%d", index.ntotal, dim)
     return index
 
@@ -197,20 +210,25 @@ def build_faiss_index(centroids):
 # Metadata
 # ---------------------------------------------------------------------------
 
-def collect_metadata(cluster_ids, cluster_sizes, labels, texts, model_name, n_clusters, purity, radii):
+
+def collect_metadata(
+    cluster_ids, cluster_sizes, labels, texts, model_name, n_clusters, purity, radii
+):
     """Build metadata dict for serialisation."""
     clusters_info = []
     for cid, size in zip(cluster_ids, cluster_sizes):
         mask = labels == cid
         indices = np.where(mask)[0]
         samples = [texts[i][:200] for i in indices[:5]]
-        clusters_info.append({
-            "cluster_id": int(cid),
-            "size": int(size),
-            "purity": round(purity.get(cid, 1.0), 4),
-            "radius": round(radii.get(cid, 0.0), 6),
-            "sample_prompts": samples,
-        })
+        clusters_info.append(
+            {
+                "cluster_id": int(cid),
+                "size": int(size),
+                "purity": round(purity.get(cid, 1.0), 4),
+                "radius": round(radii.get(cid, 0.0), 6),
+                "sample_prompts": samples,
+            }
+        )
     return {
         "model_name": model_name,
         "n_clusters_requested": n_clusters,
@@ -225,7 +243,16 @@ def collect_metadata(cluster_ids, cluster_sizes, labels, texts, model_name, n_cl
 # Persistence
 # ---------------------------------------------------------------------------
 
-def save_artifacts(output_dir, attack_centroids, attack_index, attack_metadata, benign_centroids, benign_index, radii):
+
+def save_artifacts(
+    output_dir,
+    attack_centroids,
+    attack_index,
+    attack_metadata,
+    benign_centroids,
+    benign_index,
+    radii,
+):
     """Persist all artifacts (attack + benign centroids, FAISS indices, metadata)."""
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)

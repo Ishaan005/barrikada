@@ -1,6 +1,6 @@
-# Barrikada Agentic Security Layer
+# Barrikade Agentic Security Layer
 
-Barrikada has evolved from a stateless per-request prompt-injection detector into a **stateful agentic security platform**. This document describes the new architecture, components, and how to use the session-aware API.
+Barrikade has evolved from a stateless per-request prompt-injection detector into a **stateful agentic security platform**. This document describes the new architecture, components, and how to use the session-aware API.
 
 ## Overview
 

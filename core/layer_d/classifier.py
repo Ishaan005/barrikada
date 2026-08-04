@@ -1,14 +1,19 @@
-import core.onnx_patch
+import json
 import logging
 import time
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import core.onnx_patch  # noqa: F401
+
+
+# Keep the compatibility patch above ML libraries that import Optimum.
+# isort: split
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, PreTrainedTokenizerFast
 
 from models.LayerDResult import LayerDResult
+
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +81,11 @@ class LayerDClassifier:
         onnx_dir = Path(model_dir).parent / "onnx"
         if onnx_dir.exists() and self._is_onnx_classifier_dir_ready(onnx_dir):
             log.info("Loading ONNX Layer D classifier: %s", onnx_dir)
-            from optimum.onnxruntime import ORTModelForSequenceClassification
+            # Optimum is loaded only when a complete ONNX backend is selected.
+            from optimum.onnxruntime import (  # noqa: PLC0415
+                ORTModelForSequenceClassification,
+            )
+
             tokenizer = self._load_tokenizer(str(onnx_dir))
             model = ORTModelForSequenceClassification.from_pretrained(
                 str(onnx_dir),
@@ -92,7 +101,13 @@ class LayerDClassifier:
         model.eval()
         return tokenizer, model, device, False
 
-    def __init__(self, model_dir, low=0.05, high=0.95, max_length=512, ):
+    def __init__(
+        self,
+        model_dir,
+        low=0.05,
+        high=0.95,
+        max_length=512,
+    ):
         self.max_length = max_length
         self.tokenizer, self.model, self.device, self._is_onnx = self._load_backend(model_dir)
 

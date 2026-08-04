@@ -7,13 +7,16 @@ import os
 import re
 import shutil
 import sys
+import tarfile
 import time
-from pathlib import Path
-from typing import Iterable
-from uuid import uuid4
+import zipfile
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from uuid import uuid4
 
 from core.settings import Settings
+
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +63,8 @@ class _DownloadProgress:
 
         if _use_tqdm():
             try:
-                from tqdm import tqdm
+                # tqdm is an optional enhancement for interactive downloads.
+                from tqdm import tqdm  # noqa: PLC0415
             except Exception:
                 self._tqdm = None
             else:
@@ -90,7 +94,10 @@ class _DownloadProgress:
         now = time.time()
         if self.total_bytes:
             pct = int(self.downloaded / self.total_bytes * 100)
-            if pct >= self._last_pct + _PROGRESS_LOG_STEP_PCT or now - self._last_log_time >= _PROGRESS_LOG_INTERVAL_S:
+            if (
+                pct >= self._last_pct + _PROGRESS_LOG_STEP_PCT
+                or now - self._last_log_time >= _PROGRESS_LOG_INTERVAL_S
+            ):
                 self._last_pct = pct
                 self._last_log_time = now
                 self.logger.info(
@@ -175,9 +182,7 @@ def _load_manifest(path: Path) -> dict | None:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise ArtifactDownloadError(
-            f"Manifest at {path} is not valid JSON."
-        ) from exc
+        raise ArtifactDownloadError(f"Manifest at {path} is not valid JSON.") from exc
 
 
 def _write_manifest(path: Path, manifest: dict) -> None:
@@ -195,9 +200,7 @@ def _fetch_manifest(url: str) -> dict:
     try:
         return response.json()
     except ValueError as exc:
-        raise ArtifactDownloadError(
-            f"Bundle manifest from {url} is not valid JSON."
-        ) from exc
+        raise ArtifactDownloadError(f"Bundle manifest from {url} is not valid JSON.") from exc
 
 
 def _bundle_version(manifest: dict | None) -> str | None:
@@ -245,8 +248,9 @@ def _bundle_update_required(
 
 def _list_gcs_layer_files(bucket_name: str, layer_name: str) -> list[str]:
     try:
-        from google.auth.credentials import AnonymousCredentials
-        from google.cloud import storage
+        # Preserve a focused SDK error when optional GCS support is unavailable.
+        from google.auth.credentials import AnonymousCredentials  # noqa: PLC0415
+        from google.cloud import storage  # noqa: PLC0415
     except ImportError as exc:
         raise ArtifactDownloadError(
             "Artifact download requires google-cloud-storage. "
@@ -286,7 +290,7 @@ def _download_url_to_path(url: str, local_path: Path, *, label: str | None = Non
     headers = {}
     existing_size = 0
     mode = "wb"
-    
+
     if local_path.exists():
         existing_size = local_path.stat().st_size
         if existing_size > 0:
@@ -294,10 +298,12 @@ def _download_url_to_path(url: str, local_path: Path, *, label: str | None = Non
             mode = "ab"
 
     response = _http_get(url, stream=True, headers=headers)
-    
+
     # If range is not satisfiable, it usually means we already have the whole file.
     if response.status_code == 416:
-        log.info("Range not satisfiable for %s; assuming file is fully downloaded.", local_path.name)
+        log.info(
+            "Range not satisfiable for %s; assuming file is fully downloaded.", local_path.name
+        )
         return
 
     # If the server ignores the Range header (returns 200 instead of 206), fallback to full write
@@ -322,10 +328,10 @@ def _download_url_to_path(url: str, local_path: Path, *, label: str | None = Non
 
     local_path.parent.mkdir(parents=True, exist_ok=True)
     progress = _DownloadProgress(label or local_path.name, total_bytes, log)
-    
+
     if existing_size > 0 and response.status_code == 206:
         progress.update(existing_size)
-        
+
     try:
         with local_path.open(mode) as handle:
             for chunk in response.iter_content(chunk_size=_DOWNLOAD_CHUNK_SIZE):
@@ -369,7 +375,8 @@ def _resolve_manifest_files(manifest: dict) -> list[dict]:
 
 def _http_get(url: str, *, stream: bool = False, headers: dict | None = None):
     try:
-        import requests
+        # Preserve a focused SDK error when the HTTP dependency is unavailable.
+        import requests  # noqa: PLC0415
     except ImportError as exc:
         raise ArtifactDownloadError(
             "Artifact download requires requests. Install the SDK with its default dependencies."
@@ -415,9 +422,6 @@ def _swap_bundle_dir(staging_dir: Path, target_dir: Path) -> None:
 
 
 def _extract_archive(archive_path: Path, dest_dir: Path) -> Path:
-    import tarfile
-    import zipfile
-
     dest_dir_resolved = dest_dir.resolve()
 
     if tarfile.is_tarfile(archive_path):
@@ -626,12 +630,12 @@ def download_runtime_bundle(
                 remote_path = f"{prefix}/{relative_path.as_posix()}"
             else:
                 remote_path = relative_path.as_posix()
-            
+
             destination = staging_dir / relative_path
             destination.parent.mkdir(parents=True, exist_ok=True)
-            
+
             expected_sha = entry_info.get("sha256")
-            
+
             # Fast-path: Check if existing file in target_dir is up-to-date and reuse it
             existing_target_file = target_dir / relative_path
             if existing_target_file.exists() and expected_sha:
@@ -643,16 +647,14 @@ def download_runtime_bundle(
                         return
                 except Exception as e:
                     log.debug("Failed to reuse existing file %s: %s", relative_path, e)
-            
+
             url = entry_info.get("url") or f"{base_url}/{remote_path}"
             label = f"bundle/{relative_path.as_posix()} ({idx}/{len(files)})"
             _download_url_to_path(str(url), destination, label=label)
             if expected_sha:
                 actual_sha = _sha256_file(destination)
                 if actual_sha.lower() != str(expected_sha).lower():
-                    raise ArtifactDownloadError(
-                        f"Checksum mismatch for {relative_path}"
-                    )
+                    raise ArtifactDownloadError(f"Checksum mismatch for {relative_path}")
 
         try:
             with ThreadPoolExecutor(max_workers=max_workers) as pool:

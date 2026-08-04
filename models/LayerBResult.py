@@ -1,17 +1,20 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
-from .SignatureMatch import SignatureMatch
+from typing import Any
+
 from models.LayerResult import LayerResult
+
+from .SignatureMatch import SignatureMatch
+
 
 @dataclass
 class LayerBResult(LayerResult):
     """Standardized result from Layer B (Signature Detection)"""
-    
+
     # Detection results
-    matches: List[SignatureMatch]
+    matches: list[SignatureMatch]
     verdict: str  # "allow", "flag", "block"
     confidence_score: float  # 0.0 to 1.0 - confidence in detection
-    
+
     # Processing metadata
     processing_time_ms: float
     input_hash: str
@@ -23,34 +26,34 @@ class LayerBResult(LayerResult):
 
     # Allow-listing metadata (used for early termination / skipping later layers)
     allowlisted: bool = False
-    allowlist_rules: List[str] = field(default_factory=list)
-    
-    def to_dict(self) -> Dict[str, Any]:
+    allowlist_rules: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization"""
         return {
-            'input_hash': self.input_hash,
-            'processing_time_ms': self.processing_time_ms,
-            'matches': [
+            "input_hash": self.input_hash,
+            "processing_time_ms": self.processing_time_ms,
+            "matches": [
                 {
-                    'rule_id': match.rule_id,
-                    'severity': match.severity.value,
-                    'pattern': match.pattern,
-                    'matched_text': match.matched_text,
-                    'start_pos': match.start_pos,
-                    'end_pos': match.end_pos,
-                    'rule_description': match.rule_description,
-                    'tags': match.tags,
-                    'confidence': match.confidence
+                    "rule_id": match.rule_id,
+                    "severity": match.severity.value,
+                    "pattern": match.pattern,
+                    "matched_text": match.matched_text,
+                    "start_pos": match.start_pos,
+                    "end_pos": match.end_pos,
+                    "rule_description": match.rule_description,
+                    "tags": match.tags,
+                    "confidence": match.confidence,
                 }
                 for match in self.matches
             ],
-            'verdict': self.verdict,
-            'confidence_score': self.confidence_score,
-            'attack_similarity': self.attack_similarity,
-            'benign_similarity': self.benign_similarity,
-            'contrastive_margin': self.contrastive_margin,
-            'allowlisted': self.allowlisted,
-            'allowlist_rules': list(self.allowlist_rules),
+            "verdict": self.verdict,
+            "confidence_score": self.confidence_score,
+            "attack_similarity": self.attack_similarity,
+            "benign_similarity": self.benign_similarity,
+            "contrastive_margin": self.contrastive_margin,
+            "allowlisted": self.allowlisted,
+            "allowlist_rules": list(self.allowlist_rules),
         }
 
     def get_risk_score(self) -> float:

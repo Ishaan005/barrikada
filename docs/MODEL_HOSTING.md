@@ -1,6 +1,6 @@
 # Model Hosting with Google Cloud Storage
 
-This guide explains how to manage Barrikada models using Google Cloud Storage (GCS) for centralized storage and distribution.
+This guide explains how to manage Barrikade models using Google Cloud Storage (GCS) for centralized storage and distribution.
 
 ## Overview
 

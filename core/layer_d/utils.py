@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 import torch
-from datasets import Dataset
 from sklearn.metrics import average_precision_score, classification_report, roc_auc_score
-from transformers import AutoModelForSequenceClassification, Trainer
+from transformers import AutoModelForSequenceClassification
+
+from datasets import Dataset
 
 
 def route_to_label(scores, low, high):
@@ -54,9 +55,13 @@ def make_compute_metrics(low, high):
         routed_fn = int(np.sum((routed == 0) & (labels_arr == 1)))
         routed_precision = routed_tp / max(1, routed_tp + routed_fp)
         routed_recall = routed_tp / max(1, routed_tp + routed_fn)
-        routed_f1 = 2 * routed_precision * routed_recall / max(1e-12, routed_precision + routed_recall)
+        routed_f1 = (
+            2 * routed_precision * routed_recall / max(1e-12, routed_precision + routed_recall)
+        )
         safe_fpr = float(np.mean((verdict != "allow") & (labels_arr == 0)))
-        mal_allow = float(np.mean((verdict == "allow") & (labels_arr == 1)) / max(1e-12, np.mean(labels_arr == 1)))
+        mal_allow = float(
+            np.mean((verdict == "allow") & (labels_arr == 1)) / max(1e-12, np.mean(labels_arr == 1))
+        )
 
         metrics = {
             "accuracy": acc,
@@ -118,11 +123,22 @@ def predict_scores(trainer, ds):
     return probs
 
 
-def pick_hard_negative_indices(y_train, train_scores, low, high, use_routing_band, score_min, score_max, max_samples, ):
+def pick_hard_negative_indices(
+    y_train,
+    train_scores,
+    low,
+    high,
+    use_routing_band,
+    score_min,
+    score_max,
+    max_samples,
+):
     y = np.asarray(y_train).astype(int)
     scores = np.asarray(train_scores, dtype=float)
 
-    mine_min, mine_max = (float(low), float(high)) if use_routing_band else (float(score_min), float(score_max))
+    mine_min, mine_max = (
+        (float(low), float(high)) if use_routing_band else (float(score_min), float(score_max))
+    )
     if mine_min > mine_max:
         mine_min, mine_max = mine_max, mine_min
 

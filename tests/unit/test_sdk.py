@@ -1,18 +1,57 @@
 import json
+import tarfile
+from unittest.mock import MagicMock
 
 import pytest
 
 import barrikade
+import core.artifacts as artifacts
 from barrikade.__main__ import main
 from core.artifacts import (
     ArtifactDownloadError,
     download_runtime_artifacts,
     ensure_runtime_artifacts,
-    _extract_archive,
-    _download_url_to_path,
 )
 from core.orchestrator import PIPipeline as CorePIPipeline
+from core.session import (
+    InMemorySessionStore as CoreInMemorySessionStore,
+)
+from core.session import (
+    SessionEvent as CoreSessionEvent,
+)
+from core.session import (
+    SessionEventType as CoreSessionEventType,
+)
+from core.session import (
+    SessionNotActiveError as CoreSessionNotActiveError,
+)
+from core.session import (
+    SessionStatus as CoreSessionStatus,
+)
+from core.session import (
+    SessionStoreBackend as CoreSessionStoreBackend,
+)
+from core.session import (
+    WorkloadSession as CoreWorkloadSession,
+)
+from core.session_orchestrator import (
+    SessionDetectResult as CoreSessionDetectResult,
+)
+from core.session_orchestrator import (
+    SessionOrchestrator as CoreSessionOrchestrator,
+)
+from core.session_orchestrator import (
+    create_session_orchestrator as core_create_session_orchestrator,
+)
+from core.session_settings import SessionSettings as CoreSessionSettings
 from core.settings import Settings
+from models.incident_report import IncidentReport as CoreIncidentReport
+from models.verdicts import (
+    InputProvenance as CoreInputProvenance,
+)
+from models.verdicts import (
+    Intervention as CoreIntervention,
+)
 
 
 def test_public_sdk_exports_pipeline():
@@ -20,8 +59,7 @@ def test_public_sdk_exports_pipeline():
 
 
 def test_ensure_runtime_artifacts_errors_when_auto_download_disabled(monkeypatch, tmp_path):
-    import core.artifacts
-    monkeypatch.setattr(core.artifacts, "_BUNDLE_CHECKED", False)
+    monkeypatch.setattr(artifacts, "_BUNDLE_CHECKED", False)
     monkeypatch.setenv("BARRIKADA_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     monkeypatch.setenv("BARRIKADA_CORE_MODELS_DIR", str(tmp_path / "core-models"))
     monkeypatch.setenv("BARRIKADA_BUNDLE_DIR", str(tmp_path / "bundle"))
@@ -51,7 +89,9 @@ def test_download_runtime_artifacts_fetches_missing_layers(monkeypatch, tmp_path
         local_path.parent.mkdir(parents=True, exist_ok=True)
         local_path.write_text("ok")
 
-    monkeypatch.setattr("core.artifacts._missing_layers", lambda _: ["layer_c", "layer_d", "layer_e"])
+    monkeypatch.setattr(
+        "core.artifacts._missing_layers", lambda _: ["layer_c", "layer_d", "layer_e"]
+    )
     monkeypatch.setattr("core.artifacts._list_gcs_layer_files", fake_list)
     monkeypatch.setattr("core.artifacts._download_gcs_file", fake_download)
 
@@ -99,27 +139,6 @@ def test_cli_download_artifacts_invokes_downloader(monkeypatch, capsys):
 
 
 def test_public_sdk_exports_stateful_security():
-    from core.session_orchestrator import (
-        SessionOrchestrator as CoreSessionOrchestrator,
-        create_session_orchestrator as core_create_session_orchestrator,
-        SessionDetectResult as CoreSessionDetectResult,
-    )
-    from core.session_settings import SessionSettings as CoreSessionSettings
-    from core.session import (
-        SessionEvent as CoreSessionEvent,
-        SessionEventType as CoreSessionEventType,
-        SessionNotActiveError as CoreSessionNotActiveError,
-        SessionStatus as CoreSessionStatus,
-        WorkloadSession as CoreWorkloadSession,
-        SessionStoreBackend as CoreSessionStoreBackend,
-        InMemorySessionStore as CoreInMemorySessionStore,
-    )
-    from models.verdicts import (
-        InputProvenance as CoreInputProvenance,
-        Intervention as CoreIntervention,
-    )
-    from models.incident_report import IncidentReport as CoreIncidentReport
-
     assert barrikade.SessionOrchestrator is CoreSessionOrchestrator
     assert barrikade.create_session_orchestrator is core_create_session_orchestrator
     assert barrikade.SessionDetectResult is CoreSessionDetectResult
@@ -137,28 +156,26 @@ def test_public_sdk_exports_stateful_security():
 
 
 def test_extract_archive(tmp_path):
-    import tarfile
     dest_dir = tmp_path / "dest"
     dest_dir.mkdir()
-    
+
     # Create a mock tar.gz archive
     archive_path = tmp_path / "test.tar.gz"
     test_file = tmp_path / "test_file.txt"
     test_file.write_text("hello archive")
-    
+
     with tarfile.open(archive_path, "w:gz") as tar:
         tar.add(test_file, arcname="test_file.txt")
-        
-    extracted_root = _extract_archive(archive_path, dest_dir)
+
+    extracted_root = artifacts._extract_archive(archive_path, dest_dir)
     assert extracted_root == dest_dir
     assert (dest_dir / "test_file.txt").exists()
     assert (dest_dir / "test_file.txt").read_text() == "hello archive"
 
 
 def test_download_url_to_path_resumable(monkeypatch, tmp_path):
-    from unittest.mock import MagicMock
     local_path = tmp_path / "downloaded.bin"
-    
+
     # Create a partial local file
     local_path.write_text("part1")
     assert local_path.stat().st_size == 5
@@ -175,12 +192,11 @@ def test_download_url_to_path_resumable(monkeypatch, tmp_path):
 
     monkeypatch.setattr("core.artifacts._http_get", mock_http_get)
 
-    _download_url_to_path("https://example.com/file.bin", local_path, label="test")
+    artifacts._download_url_to_path("https://example.com/file.bin", local_path, label="test")
 
     # Assert correct headers were sent
     assert len(requested_headers) == 1
     assert requested_headers[0]["Range"] == "bytes=5-"
-    
+
     # Assert file was correctly appended to
     assert local_path.read_text() == "part1part2"
-

@@ -1,4 +1,4 @@
-"""Workload session tracking for Barrikada agentic security.
+"""Workload session tracking for Barrikade agentic security.
 
 Provides a session object that persists across the lifecycle of a single
 agent task, recording declared intent, tool calls, permissions, external
@@ -23,10 +23,12 @@ import numpy as np
 from core.session_settings import SessionSettings
 from models.verdicts import InputProvenance
 
+
 log = logging.getLogger(__name__)
 
 
-#Event Types
+# Event Types
+
 
 class SessionEventType(str, Enum):
     """Types of events recorded in a workload session."""
@@ -47,9 +49,9 @@ class SessionStatus(str, Enum):
     """Lifecycle status of a workload session."""
 
     ACTIVE = "active"
-    PAUSED = "paused"          # Budget exhausted, awaiting human review
-    COMPLETED = "completed"    # Session closed normally
-    HALTED = "halted"          # Stopped by an intervention
+    PAUSED = "paused"  # Budget exhausted, awaiting human review
+    COMPLETED = "completed"  # Session closed normally
+    HALTED = "halted"  # Stopped by an intervention
 
 
 class SessionNotActiveError(RuntimeError):
@@ -68,7 +70,7 @@ class SessionNotActiveError(RuntimeError):
         )
 
 
-#Data Classes
+# Data Classes
 
 
 @dataclass
@@ -103,7 +105,7 @@ class WorkloadSession:
     Attributes:
         delegation_chain: List of agent identifiers representing the
             delegation path.  Populated by the calling framework;
-            Barrikada does not validate chain integrity.  Cryptographic
+            Barrikade does not validate chain integrity.  Cryptographic
             verification of delegation chains is out of scope for this
             phase.
     """
@@ -158,7 +160,7 @@ class WorkloadSession:
         }
 
 
-#Abstract Backend 
+# Abstract Backend
 
 
 class SessionStoreBackend(ABC):
@@ -178,16 +180,13 @@ class SessionStoreBackend(ABC):
         risk_budget: int | None = None,
         client_id: str | None = None,
         tenant_id: str | None = None,
-    ) -> WorkloadSession:
-        ...
+    ) -> WorkloadSession: ...
 
     @abstractmethod
-    def get_session(self, session_id: str) -> WorkloadSession | None:
-        ...
+    def get_session(self, session_id: str) -> WorkloadSession | None: ...
 
     @abstractmethod
-    def append_event(self, session_id: str, event: SessionEvent) -> None:
-        ...
+    def append_event(self, session_id: str, event: SessionEvent) -> None: ...
 
     @abstractmethod
     def update_risk_budget(self, session_id: str, delta: int) -> int:
@@ -198,19 +197,16 @@ class SessionStoreBackend(ABC):
         ...
 
     @abstractmethod
-    def set_session_status(self, session_id: str, status: SessionStatus) -> None:
-        ...
+    def set_session_status(self, session_id: str, status: SessionStatus) -> None: ...
 
     @abstractmethod
-    def close_session(self, session_id: str) -> WorkloadSession:
-        ...
+    def close_session(self, session_id: str) -> WorkloadSession: ...
 
     @abstractmethod
-    def list_active_sessions(self) -> list[str]:
-        ...
+    def list_active_sessions(self) -> list[str]: ...
 
 
-#In-Memory Implementation
+# In-Memory Implementation
 
 
 class InMemorySessionStore(SessionStoreBackend):
@@ -235,7 +231,7 @@ class InMemorySessionStore(SessionStoreBackend):
         self._sessions: dict[str, WorkloadSession] = {}
         self._lock = threading.Lock()
 
-    #helpers
+    # helpers
 
     def _is_expired(self, session: WorkloadSession) -> bool:
         age = (datetime.now(timezone.utc) - session.created_at).total_seconds()
@@ -243,16 +239,12 @@ class InMemorySessionStore(SessionStoreBackend):
 
     def _evict_expired(self) -> None:
         """Remove sessions older than TTL.  Called under lock."""
-        expired = [
-            sid
-            for sid, s in self._sessions.items()
-            if self._is_expired(s)
-        ]
+        expired = [sid for sid, s in self._sessions.items() if self._is_expired(s)]
         for sid in expired:
             log.info("Evicting expired session %s", sid)
             del self._sessions[sid]
 
-    #public API
+    # public API
 
     def create_session(
         self,
@@ -337,8 +329,4 @@ class InMemorySessionStore(SessionStoreBackend):
     def list_active_sessions(self) -> list[str]:
         with self._lock:
             self._evict_expired()
-            return [
-                sid
-                for sid, s in self._sessions.items()
-                if s.status == SessionStatus.ACTIVE
-            ]
+            return [sid for sid, s in self._sessions.items() if s.status == SessionStatus.ACTIVE]

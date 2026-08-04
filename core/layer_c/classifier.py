@@ -1,15 +1,20 @@
-import core.onnx_patch
 import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import core.onnx_patch  # noqa: F401
+
+
+# Keep the compatibility patch above ML libraries that import Optimum.
+# isort: split
 import joblib
 import numpy as np
-from sentence_transformers import SentenceTransformer
 import torch
+from sentence_transformers import SentenceTransformer
 
 from models.LayerCResult import LayerCResult
+
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +66,13 @@ class Classifier:
         log.info("Loading PT Layer C encoder: %s (device=%s)", embedding_model, device)
         return SentenceTransformer(embedding_model, device=device)
 
-    def __init__(self, model_path, embedding_model="all-mpnet-base-v2", low=0.35, high=0.85, ):
+    def __init__(
+        self,
+        model_path,
+        embedding_model="all-mpnet-base-v2",
+        low=0.35,
+        high=0.85,
+    ):
         self.encoder = self._load_encoder(model_path, embedding_model)
 
         # Prefer the ONNX classifier sibling if it exists; fall back to the
@@ -86,7 +97,9 @@ class Classifier:
                 # constraint goes away once calibrator.joblib is the norm.
                 artifact = joblib.load(model_path)
                 self.calibrator = artifact.get("calibrator")
-            import onnxruntime as ort
+            # ONNX Runtime is loaded only when an ONNX artifact is selected.
+            import onnxruntime as ort  # noqa: PLC0415
+
             self._onnx_session = ort.InferenceSession(
                 str(onnx_path),
                 providers=["CPUExecutionProvider"],
@@ -119,12 +132,10 @@ class Classifier:
             # second output is a list of {0: p0, 1: p1} dicts rather than
             # a numpy array. Unwrap to extract only the class-1 column.
             embeddings = np.asarray(embeddings, dtype=np.float32)
-            outputs = self._onnx_session.run(
-                None, {self._onnx_input_name: embeddings}
-            )
+            outputs = self._onnx_session.run(None, {self._onnx_input_name: embeddings})
             zipmap = outputs[1]
-            return np.array([d[1] for d in zipmap], dtype=np.float32) # type: ignore
-        return self.model.predict_proba(embeddings)[:, 1] # type: ignore
+            return np.array([d[1] for d in zipmap], dtype=np.float32)  # type: ignore
+        return self.model.predict_proba(embeddings)[:, 1]  # type: ignore
 
     def predict(self, input_text):
         start_time = time.time()

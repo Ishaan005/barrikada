@@ -11,21 +11,26 @@ from core.orchestrator import PIPipeline
 from core.settings import Settings
 from models.verdicts import FinalVerdict
 
+
 DEFAULT_MODEL_NAME = Settings().layer_e_model_dir
 
 
 class BarrikadaAgent:
-    """LLM agent with Barrikada screening on every inbound message."""
+    """LLM agent with Barrikade screening on every inbound message."""
 
     def __init__(self, model_name: str = DEFAULT_MODEL_NAME, max_history: int = 20):
         self.pipeline = PIPipeline()
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)  # nosec B615
         if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token or self.tokenizer.unk_token or self.tokenizer.pad_token
+            self.tokenizer.pad_token = (
+                self.tokenizer.eos_token or self.tokenizer.unk_token or self.tokenizer.pad_token
+            )
         dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype, trust_remote_code=True)  # nosec B615
-        self.model.to("cuda" if torch.cuda.is_available() else "cpu") # type: ignore
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name, dtype=dtype, trust_remote_code=True
+        )  # nosec B615
+        self.model.to("cuda" if torch.cuda.is_available() else "cpu")  # type: ignore
         self.model.eval()
         self.history: list[HumanMessage | AIMessage] = []
         self.max_history = max_history
@@ -39,13 +44,15 @@ class BarrikadaAgent:
         ]
         for message in history:
             role = "user" if isinstance(message, HumanMessage) else "assistant"
-            messages.append({"role": role, "content": message.content}) # type: ignore
+            messages.append({"role": role, "content": message.content})  # type: ignore
         messages.append({"role": "user", "content": question})
         return messages
 
     def _generate_response(self, question: str, history: list[HumanMessage | AIMessage]) -> str:
         messages = self._format_messages(question, history)
-        rendered_prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        rendered_prompt = self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
         encoded = self.tokenizer(rendered_prompt, return_tensors="pt")
         encoded = {key: value.to(self.model.device) for key, value in encoded.items()}
         with torch.no_grad():
@@ -55,11 +62,11 @@ class BarrikadaAgent:
                 do_sample=False,
                 pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             )
-        generated = output_ids[0][encoded["input_ids"].shape[-1]:]
+        generated = output_ids[0][encoded["input_ids"].shape[-1] :]
         return str(self.tokenizer.decode(generated, skip_special_tokens=True)).strip()
 
     def invoke(self, question: str, max_retries: int = 3) -> dict:
-        """Screen question through Barrikada, then (if allowed) call the LLM."""
+        """Screen question through Barrikade, then (if allowed) call the LLM."""
         scan = self.pipeline.detect(question)
 
         result = {
@@ -71,7 +78,7 @@ class BarrikadaAgent:
         }
 
         if scan.final_verdict == FinalVerdict.BLOCK:
-            result["agent_response"] = "[BLOCKED by Barrikada]"
+            result["agent_response"] = "[BLOCKED by Barrikade]"
             return result
 
         trimmed = self.history[-self.max_history :]
@@ -102,7 +109,7 @@ def evaluate(
     model_name: str = DEFAULT_MODEL_NAME,
     max_samples: int | None = None,
 ):
-    """Run every prompt in csv_path through the Barrikada-wrapped agent."""
+    """Run every prompt in csv_path through the Barrikade-wrapped agent."""
     project_root = _resolve_project_root()
     candidate = Path(csv_path)
     csv_file = candidate if candidate.is_absolute() else project_root / candidate
@@ -192,9 +199,9 @@ def evaluate(
 
 
 def interactive(model_name: str = DEFAULT_MODEL_NAME) -> None:
-    """Chat with the Barrikada-wrapped agent in the terminal."""
+    """Chat with the Barrikade-wrapped agent in the terminal."""
     agent = BarrikadaAgent(model_name=model_name)
-    print("Barrikada Agent  (type 'quit' to exit, 'clear' to reset history)\n")
+    print("Barrikade Agent  (type 'quit' to exit, 'clear' to reset history)\n")
 
     while True:
         try:

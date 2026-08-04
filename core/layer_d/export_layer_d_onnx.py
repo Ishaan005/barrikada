@@ -26,11 +26,13 @@ Usage:
     python core/layer_d/export_layer_d_onnx.py
     python core/layer_d/export_layer_d_onnx.py --src core/layer_d/outputs/model --dst core/layer_d/outputs/onnx
 """
+
 import argparse
 import shutil
 import sys
 import time
 from pathlib import Path
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -65,7 +67,8 @@ def main():
     print(f"Dest:   {dst}")
     print()
 
-    from optimum.onnxruntime import ORTModelForSequenceClassification
+    # Keep the heavyweight exporter dependency out of CLI help and validation paths.
+    from optimum.onnxruntime import ORTModelForSequenceClassification  # noqa: PLC0415
 
     print("Exporting ModernBERT to ONNX (this can take a few minutes)...")
     t0 = time.time()

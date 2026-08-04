@@ -2,7 +2,6 @@
 Shadow Tool Library Builder for constructing D' (shadow tool documents).
 """
 
-from typing import List, Optional
 from .tool_document import ToolDocument
 
 
@@ -11,199 +10,168 @@ class ShadowToolLibrary:
     Builds and manages the shadow tool library (D').
     Includes both task-relevant and task-irrelevant shadow tools.
     """
-    
+
     def __init__(self):
         """Initialize empty shadow tool library"""
-        self.tools: List[ToolDocument] = []
-    
+        self.tools: list[ToolDocument] = []
+
     def add_tool(self, tool):
         """Add a single tool to the library"""
         self.tools.append(tool)
-    
+
     def add_tools(self, tools):
         """Add multiple tools to the library"""
         self.tools.extend(tools)
-    
+
     def get_tools(self):
         """Get all tools in the library"""
         return self.tools.copy()
-    
+
     def clear(self):
         """Clear all tools from the library"""
         self.tools = []
-    
-    def build_default_library(self, num_relevant= 10, num_irrelevant= 20):
+
+    def build_default_library(self, num_relevant=10, num_irrelevant=20):
         """
         Build a default shadow tool library with generic tools.
-        
+
         Args:
             num_relevant: Number of potentially relevant tools
             num_irrelevant: Number of irrelevant/distractor tools
-            
+
         Returns:
             List of shadow tool documents
         """
         self.clear()
-        
+
         # Task-relevant tools (generic but potentially useful)
         relevant_tools = [
             ToolDocument(
                 name="DataAnalyzer",
-                description="Analyze and process data with statistical methods and visualizations."
+                description="Analyze and process data with statistical methods and visualizations.",
             ),
             ToolDocument(
                 name="TextProcessor",
-                description="Process and transform text data with various NLP techniques."
+                description="Process and transform text data with various NLP techniques.",
             ),
             ToolDocument(
                 name="FileManager",
-                description="Manage, organize, and manipulate files and directories."
+                description="Manage, organize, and manipulate files and directories.",
             ),
             ToolDocument(
                 name="APIConnector",
-                description="Connect to external APIs and handle HTTP requests and responses."
+                description="Connect to external APIs and handle HTTP requests and responses.",
             ),
             ToolDocument(
                 name="DatabaseQuery",
-                description="Execute queries and manage data in various database systems."
+                description="Execute queries and manage data in various database systems.",
             ),
             ToolDocument(
-                name="ImageProcessor",
-                description="Process, transform, and analyze image files."
+                name="ImageProcessor", description="Process, transform, and analyze image files."
             ),
             ToolDocument(
-                name="WebScraper",
-                description="Extract data from websites and web pages."
+                name="WebScraper", description="Extract data from websites and web pages."
             ),
             ToolDocument(
                 name="ReportGenerator",
-                description="Generate reports and documents in various formats."
+                description="Generate reports and documents in various formats.",
             ),
             ToolDocument(
                 name="ScheduleManager",
-                description="Manage schedules, tasks, and time-based operations."
+                description="Manage schedules, tasks, and time-based operations.",
             ),
             ToolDocument(
                 name="NotificationService",
-                description="Send notifications through multiple channels (email, SMS, etc.)."
+                description="Send notifications through multiple channels (email, SMS, etc.).",
             ),
         ]
-        
+
         # Task-irrelevant tools (distractors)
         irrelevant_tools = [
             ToolDocument(
                 name="WeatherChecker",
-                description="Check current weather conditions and forecasts for locations."
+                description="Check current weather conditions and forecasts for locations.",
             ),
             ToolDocument(
                 name="CurrencyConverter",
-                description="Convert between different currencies with current exchange rates."
+                description="Convert between different currencies with current exchange rates.",
+            ),
+            ToolDocument(name="RecipeManager", description="Manage and search cooking recipes."),
+            ToolDocument(
+                name="FitnessTracker", description="Track fitness activities and health metrics."
             ),
             ToolDocument(
-                name="RecipeManager",
-                description="Manage and search cooking recipes."
-            ),
-            ToolDocument(
-                name="FitnessTracker",
-                description="Track fitness activities and health metrics."
-            ),
-            ToolDocument(
-                name="MusicPlayer",
-                description="Play and manage music files and playlists."
+                name="MusicPlayer", description="Play and manage music files and playlists."
             ),
             ToolDocument(
                 name="CalendarSync",
-                description="Synchronize calendar events across multiple platforms."
+                description="Synchronize calendar events across multiple platforms.",
             ),
             ToolDocument(
-                name="PasswordManager",
-                description="Store and manage passwords securely."
+                name="PasswordManager", description="Store and manage passwords securely."
             ),
             ToolDocument(
-                name="ContactManager",
-                description="Manage contact information and address books."
+                name="ContactManager", description="Manage contact information and address books."
             ),
             ToolDocument(
-                name="TranslationService",
-                description="Translate text between multiple languages."
+                name="TranslationService", description="Translate text between multiple languages."
             ),
             ToolDocument(
-                name="NewsAggregator",
-                description="Aggregate news from multiple sources."
+                name="NewsAggregator", description="Aggregate news from multiple sources."
+            ),
+            ToolDocument(name="BookmarkManager", description="Organize and manage web bookmarks."),
+            ToolDocument(name="GameEngine", description="Create and run interactive games."),
+            ToolDocument(
+                name="PodcastPlayer", description="Stream and manage podcast subscriptions."
             ),
             ToolDocument(
-                name="BookmarkManager",
-                description="Organize and manage web bookmarks."
+                name="MapNavigator", description="Navigate and get directions using maps."
             ),
             ToolDocument(
-                name="GameEngine",
-                description="Create and run interactive games."
+                name="TimeZoneConverter", description="Convert times across different time zones."
             ),
             ToolDocument(
-                name="PodcastPlayer",
-                description="Stream and manage podcast subscriptions."
+                name="UnitConverter", description="Convert between various units of measurement."
             ),
+            ToolDocument(name="ColorPicker", description="Pick and manage color schemes."),
+            ToolDocument(name="FontManager", description="Manage and preview font families."),
+            ToolDocument(name="BackupUtility", description="Backup and restore system files."),
             ToolDocument(
-                name="MapNavigator",
-                description="Navigate and get directions using maps."
-            ),
-            ToolDocument(
-                name="TimeZoneConverter",
-                description="Convert times across different time zones."
-            ),
-            ToolDocument(
-                name="UnitConverter",
-                description="Convert between various units of measurement."
-            ),
-            ToolDocument(
-                name="ColorPicker",
-                description="Pick and manage color schemes."
-            ),
-            ToolDocument(
-                name="FontManager",
-                description="Manage and preview font families."
-            ),
-            ToolDocument(
-                name="BackupUtility",
-                description="Backup and restore system files."
-            ),
-            ToolDocument(
-                name="SystemMonitor",
-                description="Monitor system resources and performance."
+                name="SystemMonitor", description="Monitor system resources and performance."
             ),
         ]
-        
+
         # Select requested number of tools
         self.tools = relevant_tools[:num_relevant] + irrelevant_tools[:num_irrelevant]
-        
+
         return self.tools.copy()
-    
+
     def build_custom_library(self, relevant_tools, irrelevant_tools):
         """
         Build a custom shadow tool library from provided tools.
-        
+
         Args:
             relevant_tools: List of task-relevant tools
             irrelevant_tools: List of task-irrelevant tools
-            
+
         Returns:
             Complete shadow tool library
         """
         self.clear()
         self.tools = relevant_tools + irrelevant_tools
         return self.tools.copy()
-    
+
     def size(self):
         """Get the number of tools in the library"""
         return len(self.tools)
-    
+
     def get_tool_by_name(self, name):
         """
         Get a tool by its name.
-        
+
         Args:
             name: Tool name to search for
-            
+
         Returns:
             Tool document if found, None otherwise
         """
@@ -211,14 +179,14 @@ class ShadowToolLibrary:
             if tool.name == name:
                 return tool
         return None
-    
+
     def remove_tool(self, name):
         """
         Remove a tool from the library by name.
-        
+
         Args:
             name: Tool name to remove
-            
+
         Returns:
             True if tool was removed, False if not found
         """

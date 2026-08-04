@@ -1,5 +1,6 @@
 """Unit tests for the Workload Session Tracker."""
 
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -11,7 +12,7 @@ from core.session import (
     SessionEvent,
     SessionEventType,
     SessionStatus,
-    WorkloadSession,    
+    WorkloadSession,
 )
 from core.session_settings import SessionSettings
 from models.verdicts import InputProvenance
@@ -86,9 +87,9 @@ def test_close_nonexistent_session(store):
 
 
 def test_list_active_sessions(store):
-    s1 = store.create_session("task 1", _dummy_vector())
+    store.create_session("task 1", _dummy_vector())
     s2 = store.create_session("task 2", _dummy_vector())
-    s3 = store.create_session("task 3", _dummy_vector())
+    store.create_session("task 3", _dummy_vector())
 
     active = store.list_active_sessions()
     assert len(active) == 3
@@ -170,9 +171,7 @@ def test_max_events_cap():
 
 
 def test_update_risk_budget(store):
-    session = store.create_session(
-        "test", _dummy_vector(), risk_budget=5
-    )
+    session = store.create_session("test", _dummy_vector(), risk_budget=5)
     remaining = store.update_risk_budget(session.session_id, 2)
     assert remaining == 3
 
@@ -246,8 +245,6 @@ def test_event_to_dict():
 
 def test_concurrent_event_appending(store):
     """Verify thread safety by appending events from multiple threads."""
-    import threading
-
     session = store.create_session("concurrent test", _dummy_vector())
     errors: list[Exception] = []
 

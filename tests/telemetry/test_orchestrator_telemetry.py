@@ -1,9 +1,12 @@
 import unittest
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from core.orchestrator import PIPipeline
-from models.verdicts import DecisionLayer, FinalVerdict
 from models.LayerEResult import LayerEResult
+from models.verdicts import DecisionLayer, FinalVerdict
+
 
 def dummy_init(self):
     self.layer_a_analyze = MagicMock()
@@ -11,6 +14,7 @@ def dummy_init(self):
     self.layer_c_classifier = MagicMock()
     self.layer_d_classifier = MagicMock()
     self.layer_e_judge = MagicMock()
+
 
 @pytest.mark.telemetry
 @patch("core.orchestrator.PIPipeline.__init__", dummy_init)
@@ -22,9 +26,11 @@ def dummy_init(self):
 @patch("core.layer_e.llm_judge.LLMJudge")
 class TestOrchestratorTelemetry(unittest.TestCase):
     @patch("core.orchestrator.telemetry")
-    def test_detect_telemetry_emit_layer_a(self, mock_telemetry, mock_llm_judge, mock_d, mock_c, mock_b, mock_a, mock_ensure):
+    def test_detect_telemetry_emit_layer_a(
+        self, mock_telemetry, mock_llm_judge, mock_d, mock_c, mock_b, mock_a, mock_ensure
+    ):
         pipeline = PIPipeline()
-        
+
         # Mock Layer A to return a block result
         mock_layer_a_res = MagicMock()
         mock_layer_a_res.get_verdict.return_value = "block"
@@ -33,46 +39,45 @@ class TestOrchestratorTelemetry(unittest.TestCase):
         mock_layer_a_res.confidence_score = 0.95
         mock_layer_a_res.processing_time_ms = 12.5
         mock_layer_a_res.get_risk_score.return_value = 85.0
-        
+
         pipeline.layer_a_analyze = MagicMock(return_value=mock_layer_a_res)
-        
+
         # Call detect
         res = pipeline.detect(
-            "dangerous prompt",
-            workload_id="work-123",
-            trace_id="trace-456",
-            span_id="span-789"
+            "dangerous prompt", workload_id="work-123", trace_id="trace-456", span_id="span-789"
         )
-        
+
         # Verify result is a PipelineResult
         self.assertEqual(res.final_verdict, FinalVerdict.BLOCK)
         self.assertEqual(res.decision_layer, DecisionLayer.LAYER_A)
-        
+
         # Check telemetry was emitted with expected arguments
         mock_telemetry.emit_sampled.assert_called_once()
         call_kwargs = mock_telemetry.emit_sampled.call_args[1]
-        
+
         self.assertEqual(call_kwargs["event_type"], "pipeline_run")
         self.assertEqual(call_kwargs["workload_id"], "work-123")
         self.assertEqual(call_kwargs["trace_id"], "trace-456")
         self.assertEqual(call_kwargs["span_id"], "span-789")
-        
+
         payload = call_kwargs["payload"]
         self.assertEqual(payload["input_hash"], res.input_hash)
         self.assertEqual(payload["final_verdict"], "block")
         self.assertEqual(payload["decision_layer"], "A")
         self.assertEqual(payload["layer_a_verdict"], "block")
         self.assertIsNone(payload["layer_b_verdict"])
-        
+
         metrics = call_kwargs["metrics"]
         self.assertEqual(metrics["risk_score"], 85.0)
         self.assertEqual(metrics["layer_a_time_ms"], 12.5)
         self.assertNotIn("layer_b_time_ms", metrics)
 
     @patch("core.orchestrator.telemetry")
-    def test_detect_telemetry_emit_layer_e(self, mock_telemetry, mock_llm_judge, mock_d, mock_c, mock_b, mock_a, mock_ensure):
+    def test_detect_telemetry_emit_layer_e(
+        self, mock_telemetry, mock_llm_judge, mock_d, mock_c, mock_b, mock_a, mock_ensure
+    ):
         pipeline = PIPipeline()
-        
+
         # Mock Layer A to allow
         mock_layer_a_res = MagicMock()
         mock_layer_a_res.get_verdict.return_value = "allow"
@@ -82,28 +87,28 @@ class TestOrchestratorTelemetry(unittest.TestCase):
         mock_layer_a_res.processing_time_ms = 5.0
         mock_layer_a_res.get_risk_score.return_value = 0.0
         pipeline.layer_a_analyze = MagicMock(return_value=mock_layer_a_res)
-        
+
         # Mock Layer B to pass / "none"
         mock_layer_b_res = MagicMock()
         mock_layer_b_res.verdict = "none"
         mock_layer_b_res.confidence_score = 0.0
         mock_layer_b_res.processing_time_ms = 2.0
         pipeline.layer_b_engine.detect = MagicMock(return_value=mock_layer_b_res)
-        
+
         # Mock Layer C to pass / "none"
         mock_layer_c_res = MagicMock()
         mock_layer_c_res.verdict = "none"
         mock_layer_c_res.confidence_score = 0.0
         mock_layer_c_res.processing_time_ms = 3.0
         pipeline.layer_c_classifier.predict = MagicMock(return_value=mock_layer_c_res)
-        
+
         # Mock Layer D to pass / "none"
         mock_layer_d_res = MagicMock()
         mock_layer_d_res.verdict = "none"
         mock_layer_d_res.confidence_score = 0.0
         mock_layer_d_res.processing_time_ms = 4.0
         pipeline.layer_d_classifier.predict = MagicMock(return_value=mock_layer_d_res)
-        
+
         # Mock Layer E LLM judge
         mock_judge_out = MagicMock()
         mock_judge_out.decision = "allow"
@@ -115,16 +120,16 @@ class TestOrchestratorTelemetry(unittest.TestCase):
         mock_judge_out.prompt_tokens = 100
         mock_judge_out.completion_tokens = 20
         mock_judge_out.total_tokens = 120
-        
+
         pipeline.layer_e_judge.call_judge = MagicMock(return_value=mock_judge_out)
-        
+
         # Run detect
         res = pipeline.detect("benign prompt", workload_id="w1")
-        
+
         # Assertions on pipeline result
         self.assertEqual(res.final_verdict, FinalVerdict.ALLOW)
         self.assertEqual(res.decision_layer, DecisionLayer.LAYER_E)
-        
+
         # Verify Layer E result structure
         self.assertIsInstance(res.layer_e_result, LayerEResult)
         self.assertEqual(res.layer_e_result.verdict, "allow")
@@ -136,11 +141,11 @@ class TestOrchestratorTelemetry(unittest.TestCase):
         self.assertEqual(res.layer_e_result.prompt_tokens, 100)
         self.assertEqual(res.layer_e_result.completion_tokens, 20)
         self.assertEqual(res.layer_e_result.total_tokens, 120)
-        
+
         # Assertions on telemetry
         mock_telemetry.emit_sampled.assert_called_once()
         call_kwargs = mock_telemetry.emit_sampled.call_args[1]
-        
+
         self.assertEqual(call_kwargs["workload_id"], "w1")
         payload = call_kwargs["payload"]
         self.assertEqual(payload["layer_a_verdict"], "allow")

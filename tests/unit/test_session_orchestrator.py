@@ -19,6 +19,7 @@ from core.session_orchestrator import SessionDetectResult, SessionOrchestrator
 from core.session_settings import SessionSettings
 from models.verdicts import FinalVerdict, InputProvenance, Intervention
 
+
 # Note: these tests use MockPipeline / MockIntentScorer fixtures (defined
 # below) and never touch the real Layer B/C/D/E artifacts or the
 # all-MiniLM-L6-v2 intent embedding model. A previous module-level skip
@@ -56,9 +57,12 @@ class MockIntentScorer:
             drift_score=drift,
             cosine_similarity=1.0 - drift,
             risk_level=(
-                DriftLevel.CRITICAL if drift >= 0.55
-                else DriftLevel.HIGH if drift >= 0.35
-                else DriftLevel.MODERATE if drift >= 0.21
+                DriftLevel.CRITICAL
+                if drift >= 0.55
+                else DriftLevel.HIGH
+                if drift >= 0.35
+                else DriftLevel.MODERATE
+                if drift >= 0.21
                 else DriftLevel.LOW
             ),
             proposed_action_vector=_dummy_vector(),
@@ -204,7 +208,9 @@ def test_high_drift_triggers_budget_deduction(orchestrator, mock_scorer, mock_pi
 
 
 def test_critical_drift_escalates_regardless_of_budget(
-    orchestrator, mock_scorer, mock_pipeline,
+    orchestrator,
+    mock_scorer,
+    mock_pipeline,
 ):
     """CRITICAL drift must force ESCALATE even when budget remains.
 
@@ -453,7 +459,9 @@ def test_detect_rejected_on_completed_session(orchestrator):
 
 
 @patch("core.session_orchestrator.telemetry.emit")
-def test_distributed_tracing_and_telemetry_emission(mock_emit, orchestrator, mock_pipeline, mock_scorer):
+def test_distributed_tracing_and_telemetry_emission(
+    mock_emit, orchestrator, mock_pipeline, mock_scorer
+):
     # 1. Start session with trace_id and span_id
     session_id = orchestrator.start_session(
         declared_intent="Analyze risk parameters",
@@ -463,7 +471,7 @@ def test_distributed_tracing_and_telemetry_emission(mock_emit, orchestrator, moc
         trace_id="trace-123",
         span_id="span-456",
     )
-    
+
     # Assert session_start telemetry was emitted
     mock_emit.assert_any_call(
         event_type="session_start",
@@ -486,7 +494,7 @@ def test_distributed_tracing_and_telemetry_emission(mock_emit, orchestrator, moc
     # 2. Call detect_with_session with trace_id and span_id
     mock_pipeline.set_next_verdict("allow")
     mock_scorer.set_next_drift(0.12)
-    
+
     orchestrator.detect_with_session(
         session_id=session_id,
         input_text="Benign action",
@@ -520,8 +528,8 @@ def test_distributed_tracing_and_telemetry_emission(mock_emit, orchestrator, moc
 
     # 3. Trigger risk budget deduction
     mock_pipeline.set_next_verdict("block")  # triggers PIPELINE_FLAG (cost 1)
-    mock_scorer.set_next_drift(0.40)        # triggers HIGH_INTENT_DRIFT (cost 1)
-    
+    mock_scorer.set_next_drift(0.40)  # triggers HIGH_INTENT_DRIFT (cost 1)
+
     orchestrator.detect_with_session(
         session_id=session_id,
         input_text="Highly suspicious payload",
@@ -538,7 +546,7 @@ def test_distributed_tracing_and_telemetry_emission(mock_emit, orchestrator, moc
         payload={
             "deduction_reasons": [
                 "Pipeline verdict: block (layer B)",
-                "Intent drift 0.400 exceeds threshold 0.35"
+                "Intent drift 0.400 exceeds threshold 0.35",
             ],
             "risk_categories": ["pipeline_flag", "high_intent_drift"],
         },
@@ -549,7 +557,9 @@ def test_distributed_tracing_and_telemetry_emission(mock_emit, orchestrator, moc
     )
 
     # Assert intervention_triggered was NOT emitted because intervention remains Intervention.NONE (budget is still 8)
-    assert not any(call[1].get("event_type") == "intervention_triggered" for call in mock_emit.call_args_list)
+    assert not any(
+        call[1].get("event_type") == "intervention_triggered" for call in mock_emit.call_args_list
+    )
 
     mock_emit.reset_mock()
 
@@ -569,7 +579,7 @@ def test_distributed_tracing_and_telemetry_emission(mock_emit, orchestrator, moc
         trace_id="trace-ex-detect",
         span_id="span-ex-detect",
     )
-    
+
     # Assert intervention_triggered telemetry was emitted
     mock_emit.assert_any_call(
         event_type="intervention_triggered",
@@ -597,7 +607,7 @@ def test_distributed_tracing_and_telemetry_emission(mock_emit, orchestrator, moc
     )
     mock_emit.reset_mock()
     mock_pipeline.set_next_verdict("allow")
-    mock_scorer.set_next_drift(0.65) # Critical drift
+    mock_scorer.set_next_drift(0.65)  # Critical drift
     orchestrator.detect_with_session(
         session_id=session_id_crit,
         input_text="Completely unrelated action",

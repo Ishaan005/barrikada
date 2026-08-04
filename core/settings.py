@@ -126,8 +126,8 @@ class Settings(BaseModel):
 
     # Two-threshold decision system (applied to mean top-k attack similarity)
     # Empirically calibrated on barrikade_test.csv (block_prec=0.96, fblk=0.53%)
-    layer_b_block_threshold: float = 0.86   # sweep-calibrated conservative block threshold
-    layer_b_flag_threshold: float = 0.62    # sweep-calibrated conservative flag threshold
+    layer_b_block_threshold: float = 0.86  # sweep-calibrated conservative block threshold
+    layer_b_flag_threshold: float = 0.62  # sweep-calibrated conservative flag threshold
     # Below flag_threshold → SAFE (allow)
 
     # Contrastive guardrails for safer Layer B calibration
@@ -143,7 +143,7 @@ class Settings(BaseModel):
     # Cluster building
     layer_b_n_clusters: int = 64
     layer_b_min_cluster_purity: float = 0.70  # drop clusters below this purity
-    layer_b_purity_proximity: float = 0.70     # only count benign prompts with sim >= this
+    layer_b_purity_proximity: float = 0.70  # only count benign prompts with sim >= this
 
     # Confidence values emitted in LayerBResult
     layer_b_block_confidence: float = 0.95
@@ -178,7 +178,6 @@ class Settings(BaseModel):
     @property
     def layer_b_signatures_dirname(self) -> str:
         return str(Path(self.artifacts_root_dir) / "layer_b" / "embeddings")
-    
 
     ### Layer C
     # Routing thresholds for Layer C classifier:
@@ -191,7 +190,7 @@ class Settings(BaseModel):
     layer_c_test_split: float = 0.50
 
     layer_c_embedding_model: str = "all-mpnet-base-v2"
-    layer_c_embedding_batch_size: int    = 128
+    layer_c_embedding_batch_size: int = 128
 
     # Probability calibration (fixed to isotonic in training flow)
     layer_c_calibration_bins: int = 15
@@ -238,10 +237,8 @@ class Settings(BaseModel):
             Path(self.core_models_dir) / "layer_c" / "releases",
         )
 
-    
     @property
     def model_path(self):
-        legacy = self._package_root / "layer_c" / "outputs" / "classifier.joblib"
         return self._existing_path_with_override(
             "BARRIKADA_LAYER_C_MODEL_PATH",
             self.layer_c_model_candidates,
@@ -307,7 +304,6 @@ class Settings(BaseModel):
 
     @property
     def layer_d_output_dir(self):
-        legacy = self._package_root / "layer_d" / "outputs" / "model"
         return self._existing_path_with_override(
             "BARRIKADA_LAYER_D_MODEL_DIR",
             self.layer_d_model_candidates,

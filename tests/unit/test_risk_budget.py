@@ -167,14 +167,10 @@ def test_zero_cost_category():
 
 def test_per_session_budget_override(store, settings):
     engine = RiskBudgetEngine(store, settings)
-    session = store.create_session(
-        "test", _dummy_vector(), risk_budget=2
-    )
+    session = store.create_session("test", _dummy_vector(), risk_budget=2)
 
     engine.assess_risk(session.session_id, [RiskCategory.PIPELINE_FLAG], ["f1"])
-    result = engine.assess_risk(
-        session.session_id, [RiskCategory.PIPELINE_FLAG], ["f2"]
-    )
+    result = engine.assess_risk(session.session_id, [RiskCategory.PIPELINE_FLAG], ["f2"])
 
     assert result.allowed is False  # 2 - 1 - 1 = 0 → escalate
     assert result.budget_remaining == 0
@@ -216,9 +212,6 @@ def test_risk_deduction_recorded_as_event(engine, session_id, store):
     )
     session = store.get_session(session_id)
     assert session is not None
-    budget_events = [
-        e for e in session.events
-        if e.event_type.value == "risk_budget_deduction"
-    ]
+    budget_events = [e for e in session.events if e.event_type.value == "risk_budget_deduction"]
     assert len(budget_events) == 1
     assert budget_events[0].data["total_cost"] == 1

@@ -48,12 +48,12 @@ import faiss
 import numpy as np
 import torch
 import torch.nn.functional as F
+from sentence_transformers import SentenceTransformer
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset
-from sentence_transformers import SentenceTransformer
+
 
 log = logging.getLogger(__name__)
-
 
 
 # Hard Negative Mining
@@ -73,15 +73,19 @@ def mine_hard_negatives(mal_texts, safe_texts, base_model_name, k=5):
 
     log.info("  Encoding %d malicious texts …", len(mal_texts))
     mal_emb = model.encode(
-        mal_texts, batch_size=256,
-        show_progress_bar=True, normalize_embeddings=True,
+        mal_texts,
+        batch_size=256,
+        show_progress_bar=True,
+        normalize_embeddings=True,
     )
     mal_emb = np.asarray(mal_emb, dtype=np.float32)
 
     log.info("  Encoding %d safe texts …", len(safe_texts))
     safe_emb = model.encode(
-        safe_texts, batch_size=256,
-        show_progress_bar=True, normalize_embeddings=True,
+        safe_texts,
+        batch_size=256,
+        show_progress_bar=True,
+        normalize_embeddings=True,
     )
     safe_emb = np.asarray(safe_emb, dtype=np.float32)
 
@@ -89,13 +93,13 @@ def mine_hard_negatives(mal_texts, safe_texts, base_model_name, k=5):
 
     # Malicious → closest safe
     safe_idx = faiss.IndexFlatIP(dim)
-    safe_idx.add(safe_emb) # type: ignore
-    _, mal_neg_ids = safe_idx.search(mal_emb, k) # type: ignore
+    safe_idx.add(safe_emb)  # type: ignore
+    _, mal_neg_ids = safe_idx.search(mal_emb, k)  # type: ignore
 
     # Safe → closest malicious
     mal_idx = faiss.IndexFlatIP(dim)
-    mal_idx.add(mal_emb) # type: ignore
-    _, safe_neg_ids = mal_idx.search(safe_emb, k) # type: ignore
+    mal_idx.add(mal_emb)  # type: ignore
+    _, safe_neg_ids = mal_idx.search(safe_emb, k)  # type: ignore
 
     del model, mal_emb, safe_emb
     gc.collect()
@@ -104,7 +108,6 @@ def mine_hard_negatives(mal_texts, safe_texts, base_model_name, k=5):
 
     log.info("Hard negative mining complete.")
     return mal_neg_ids, safe_neg_ids
-
 
 
 # Dataset
@@ -128,7 +131,7 @@ class ContrastivePairDataset(Dataset):
         n_mal = len(mal_texts)
         n_safe = len(safe_texts)
 
-        #Malicious positive pairs + safe hard negatives
+        # Malicious positive pairs + safe hard negatives
         indices = list(range(n_mal))
         random.shuffle(indices)
         for i in range(0, n_mal - 1, 2):
@@ -136,7 +139,7 @@ class ContrastivePairDataset(Dataset):
             hards = [safe_texts[int(j)] for j in mal_neg_ids[a][:n_hard]]
             self.items.append((mal_texts[a], mal_texts[b], hards))
 
-        #Safe positive pairs + malicious hard negatives
+        # Safe positive pairs + malicious hard negatives
         n_safe_pairs = min(n_safe // 2, len(self.items))
         indices = list(range(n_safe))
         random.shuffle(indices)
@@ -150,8 +153,7 @@ class ContrastivePairDataset(Dataset):
         if max_pairs and len(self.items) > max_pairs:
             self.items = self.items[:max_pairs]
 
-        log.info("Training dataset: %d pairs (%d hard negatives each)",
-                 len(self.items), n_hard)
+        log.info("Training dataset: %d pairs (%d hard negatives each)", len(self.items), n_hard)
 
     def __len__(self):
         return len(self.items)
@@ -191,7 +193,7 @@ def train_dual_encoder(mal_texts, safe_texts, settings):
     lr = settings.layer_b_dual_encoder_lr
     max_samples = settings.layer_b_dual_encoder_max_samples
 
-    #Subsample for training speed
+    # Subsample for training speed
     if max_samples and len(mal_texts) > max_samples:
         mal_sample = random.sample(list(mal_texts), max_samples)  # nosec B311
     else:
@@ -202,39 +204,52 @@ def train_dual_encoder(mal_texts, safe_texts, settings):
     else:
         safe_sample = list(safe_texts)
 
-    log.info("Training samples: %d malicious, %d safe (max_samples=%s)",
-             len(mal_sample), len(safe_sample), max_samples)
-
-    #Mine hard negatives
-    mal_neg_ids, safe_neg_ids = mine_hard_negatives(
-        mal_sample, safe_sample, base_model, k=n_hard,
+    log.info(
+        "Training samples: %d malicious, %d safe (max_samples=%s)",
+        len(mal_sample),
+        len(safe_sample),
+        max_samples,
     )
 
-    #Build dataset
+    # Mine hard negatives
+    mal_neg_ids, safe_neg_ids = mine_hard_negatives(
+        mal_sample,
+        safe_sample,
+        base_model,
+        k=n_hard,
+    )
+
+    # Build dataset
     dataset = ContrastivePairDataset(
-        mal_sample, safe_sample, mal_neg_ids, safe_neg_ids,
-        n_hard=n_hard, max_pairs=max_samples,
+        mal_sample,
+        safe_sample,
+        mal_neg_ids,
+        safe_neg_ids,
+        n_hard=n_hard,
+        max_pairs=max_samples,
     )
     dataloader = DataLoader(
-        dataset, batch_size=batch_size, shuffle=True,
-        collate_fn=_collate, drop_last=True,
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        collate_fn=_collate,
+        drop_last=True,
     )
 
-    #Initialise both encoders from the same base model
+    # Initialise both encoders from the same base model
     log.info("Initialising dual encoders from %s …", base_model)
     prompt_encoder = SentenceTransformer(base_model)
     signature_encoder = SentenceTransformer(base_model)
     prompt_encoder.to(device)
     signature_encoder.to(device)
 
-    #Optimiser (joint update of both encoders)
+    # Optimiser (joint update of both encoders)
     optimizer = AdamW(
-        list(prompt_encoder.parameters())
-        + list(signature_encoder.parameters()),
+        list(prompt_encoder.parameters()) + list(signature_encoder.parameters()),
         lr=lr,
     )
 
-    #Training loop
+    # Training loop
     for epoch in range(epochs):
         prompt_encoder.train()
         signature_encoder.train()
@@ -261,7 +276,7 @@ def train_dual_encoder(mal_texts, safe_texts, settings):
             hard_emb_list = []
             chunk_size = max(1, B)
             for i in range(0, len(hard_negs), chunk_size):
-                chunk = hard_negs[i:i+chunk_size]
+                chunk = hard_negs[i : i + chunk_size]
                 h_feat = signature_encoder.tokenize(chunk)
                 h_feat = _to_device(h_feat, device)
                 h_emb = signature_encoder(h_feat)["sentence_embedding"]
@@ -272,9 +287,13 @@ def train_dual_encoder(mal_texts, safe_texts, settings):
             in_batch_sim = torch.mm(p_emb, pos_emb.t()) / temperature
 
             # Hard negative similarity: (B, n_hard)
-            hard_sim = torch.bmm(
-                p_emb.unsqueeze(1), hard_emb.transpose(1, 2),
-            ).squeeze(1) / temperature
+            hard_sim = (
+                torch.bmm(
+                    p_emb.unsqueeze(1),
+                    hard_emb.transpose(1, 2),
+                ).squeeze(1)
+                / temperature
+            )
 
             # Combined logits: (B, B + n_hard)
             logits = torch.cat([in_batch_sim, hard_sim], dim=1)
@@ -292,14 +311,14 @@ def train_dual_encoder(mal_texts, safe_texts, settings):
             n_steps += 1
 
             if n_steps % 100 == 0:
-                log.info("  [epoch %d] step %d — loss %.4f",
-                         epoch + 1, n_steps, total_loss / n_steps)
+                log.info(
+                    "  [epoch %d] step %d — loss %.4f", epoch + 1, n_steps, total_loss / n_steps
+                )
 
         avg_loss = total_loss / max(n_steps, 1)
-        log.info("Epoch %d/%d — avg loss: %.4f (%d steps)",
-                 epoch + 1, epochs, avg_loss, n_steps)
+        log.info("Epoch %d/%d — avg loss: %.4f (%d steps)", epoch + 1, epochs, avg_loss, n_steps)
 
-    #Save encoders
+    # Save encoders
     sig_dir = Path(settings.layer_b_signatures_dir)
     prompt_path = sig_dir / "prompt_encoder"
     sig_path = sig_dir / "signature_encoder"

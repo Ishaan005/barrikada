@@ -1,13 +1,9 @@
-import json
 import time
 from dataclasses import dataclass
 from typing import Any, cast
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
-from core.settings import Settings
-from models.PipelineResult import PipelineResult
 
 
 ATTACK_PRESETS = {
@@ -135,7 +131,9 @@ def run_unprotected_baseline(prompt, settings):
         {"role": "user", "content": prompt},
     ]
 
-    rendered_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    rendered_prompt = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
     encoded = tokenizer(rendered_prompt, return_tensors="pt")
     encoded = {key: value.to(model.device) for key, value in encoded.items()}
     started = time.time()
@@ -147,6 +145,6 @@ def run_unprotected_baseline(prompt, settings):
             pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
         )
     latency_ms = (time.time() - started) * 1000.0
-    generated = output_ids[0][encoded["input_ids"].shape[-1]:]
+    generated = output_ids[0][encoded["input_ids"].shape[-1] :]
     content = str(tokenizer.decode(generated, skip_special_tokens=True)).strip()
     return BaselineResult(output=content, model=model_name, latency_ms=latency_ms)

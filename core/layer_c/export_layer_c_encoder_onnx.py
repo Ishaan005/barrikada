@@ -22,9 +22,11 @@ Usage:
     python core/layer_c/export_layer_c_encoder_onnx.py
     python core/layer_c/export_layer_c_encoder_onnx.py --dst core/models/layer_c/encoder_onnx
 """
+
 import argparse
 import time
 from pathlib import Path
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -55,7 +57,8 @@ def main():
     print(f"Dest (ONNX): {dst}")
     print()
 
-    from sentence_transformers import SentenceTransformer
+    # Keep the heavyweight exporter dependency out of CLI help and validation paths.
+    from sentence_transformers import SentenceTransformer  # noqa: PLC0415
 
     print(f"Loading {args.src} with backend='onnx' (triggers PT->ONNX conversion)...")
     t0 = time.time()

@@ -22,15 +22,18 @@ We enforce a highly optimized subset of Ruff lint rules. In `pyproject.toml`, ou
 - **`I`**: Isort (alphabetical, organized import block styling).
 - **`PLC0415`**: Enforces top-level imports.
 - **`PLC2701`**: Restricts importing private names from other modules.
+- **`UP006`, `UP007`, `UP035`, `UP045`**: Enforce Python 3.10+ collection and union typing syntax.
 
 ---
 
 ## 3. Core Importing Standards
 
-### Top-level Imports Only (Enforced by `PLC0415`)
-- Every `import` statement MUST be placed at the very top of the module, above any class or function definition.
-- Local/inline imports inside functions or classes are strictly forbidden (e.g. for lazy-loading or reducing startup costs) because they hide dependency trees.
-- **Exception**: Untangling circular dependencies. If you must use a local/inline import to break an import cycle, you MUST add a one-line comment (`# inline import to resolve circular dependency`) explaining why the cycle cannot be cleanly decoupled.
+### Top-level Imports by Default (Enforced by `PLC0415`)
+- Place ordinary imports at module scope, above class and function definitions.
+- A local import is allowed only when it preserves intentional lazy loading, optional-dependency
+  fallback, required initialization order, or resolves a circular dependency.
+- Every exception must have a one-line explanation and a narrow `# noqa: PLC0415` on the import;
+  module-wide exemptions are not allowed.
 
 ### No Private Name Imports (Enforced by `PLC2701`)
 - Symbols prefixed with a single leading underscore (e.g., `_my_private_function`) are module-private.

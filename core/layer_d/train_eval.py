@@ -6,13 +6,12 @@ import torch
 from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from transformers import (
-    Trainer,
     AutoTokenizer,
     DataCollatorWithPadding,
+    Trainer,
     TrainingArguments,
 )
 
-from core.settings import Settings
 from core.layer_d.utils import (
     augment_with_hard_negatives,
     binary_report,
@@ -24,13 +23,15 @@ from core.layer_d.utils import (
     tokenize_datasets,
     verdict_breakdown,
 )
+from core.settings import Settings
+
 
 _settings = Settings()
 SEED = _settings.layer_c_seed
 
 
 class LayerDTrainer(Trainer):
-    def __init__(self, *args, class_weights= None, focal_gamma= 0.0, **kwargs):
+    def __init__(self, *args, class_weights=None, focal_gamma=0.0, **kwargs):
         super().__init__(*args, **kwargs)
         self.class_weights = class_weights
         self.focal_gamma = focal_gamma
@@ -111,7 +112,7 @@ def train_eval(X, y, model_out_dir, low=None, high=None):
 
     training_args = TrainingArguments(
         output_dir=str(output_dir),
-        #overwrite_output_dir=True,
+        # overwrite_output_dir=True,
         num_train_epochs=s.layer_d_num_train_epochs,
         learning_rate=s.layer_d_learning_rate,
         lr_scheduler_type="cosine",
@@ -222,7 +223,9 @@ def train_eval(X, y, model_out_dir, low=None, high=None):
             hard_negative_meta["stage2_ran"] = True
             hard_negative_meta["augmented_rows_added"] = int(extra_rows)
         else:
-            print("Skipping stage 2 hard-negative retraining (not enough mined samples or multiplier <= 0).")
+            print(
+                "Skipping stage 2 hard-negative retraining (not enough mined samples or multiplier <= 0)."
+            )
 
     print(f"Saving model artifacts to {output_dir} ...")
     trainer.save_model(str(output_dir))
@@ -236,7 +239,9 @@ def train_eval(X, y, model_out_dir, low=None, high=None):
     test_pred_05 = test_scores >= 0.5
 
     val_verdict, val_pred_route = route_to_label(val_scores, low=low_threshold, high=high_threshold)
-    test_verdict, test_pred_route = route_to_label(test_scores, low=low_threshold, high=high_threshold)
+    test_verdict, test_pred_route = route_to_label(
+        test_scores, low=low_threshold, high=high_threshold
+    )
 
     val_verdict_counts = pd.Series(val_verdict).value_counts().to_dict()
     test_verdict_counts = pd.Series(test_verdict).value_counts().to_dict()

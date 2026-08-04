@@ -30,7 +30,7 @@ def test_live_healthcheck():
 
 
 def test_detect_success_without_diagnostics(monkeypatch):
-    state.pipeline = _FakePipeline() #type: ignore
+    state.pipeline = _FakePipeline()  # type: ignore
     state.startup_error = None
 
     client = TestClient(app)
@@ -44,7 +44,7 @@ def test_detect_success_without_diagnostics(monkeypatch):
 
 
 def test_detect_success_with_diagnostics(monkeypatch):
-    state.pipeline = _FakePipeline() #type: ignore
+    state.pipeline = _FakePipeline()  # type: ignore
     state.startup_error = None
 
     client = TestClient(app)
@@ -67,7 +67,7 @@ def test_detect_unavailable_pipeline_returns_503():
 
 
 def test_ready_local_teacher_mode(monkeypatch):
-    state.pipeline = _FakePipeline() #type: ignore
+    state.pipeline = _FakePipeline()  # type: ignore
     state.startup_error = None
 
     monkeypatch.setattr(

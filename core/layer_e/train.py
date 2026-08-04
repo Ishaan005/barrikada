@@ -1,10 +1,4 @@
 import argparse
-import sys
-from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.layer_c.train.load_data import load_data
 from core.layer_c.train.utils import write_json
@@ -16,7 +10,9 @@ def main():
     settings = Settings()
 
     parser = argparse.ArgumentParser(description="Train Layer E Qwen3.5 teacher with QLoRA")
-    parser.add_argument("--csv", default=settings.dataset_path, help="Path to CSV with text,label columns")
+    parser.add_argument(
+        "--csv", default=settings.dataset_path, help="Path to CSV with text,label columns"
+    )
     parser.add_argument(
         "--model-out",
         default=settings.layer_e_teacher_output_dir,

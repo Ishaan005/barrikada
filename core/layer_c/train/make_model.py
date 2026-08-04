@@ -1,16 +1,21 @@
 import torch
-from core.settings import Settings
 from xgboost import XGBClassifier
+
+from core.settings import Settings
+
 
 _settings = Settings()
 SEED = _settings.layer_c_seed
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+
 def make_model(scale_pos_weight):
     """Create Layer C XGBoost model with explicit hyperparameters."""
-    params = {"device": "cuda", "tree_method": _settings.layer_c_xgb_tree_method} if _DEVICE == "cuda" else {
-        "tree_method": _settings.layer_c_xgb_tree_method
-    }
+    params = (
+        {"device": "cuda", "tree_method": _settings.layer_c_xgb_tree_method}
+        if _DEVICE == "cuda"
+        else {"tree_method": _settings.layer_c_xgb_tree_method}
+    )
     return XGBClassifier(
         random_state=SEED,
         n_estimators=_settings.layer_c_xgb_n_estimators,
@@ -25,5 +30,5 @@ def make_model(scale_pos_weight):
         scale_pos_weight=scale_pos_weight,
         early_stopping_rounds=_settings.layer_c_xgb_early_stopping_rounds,
         eval_metric="logloss",
-        **params
+        **params,
     )

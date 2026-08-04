@@ -69,9 +69,7 @@ class Qwen3GuardJudge:
 
                 return tokenizer
 
-            raise ValueError(
-                f"Could not load tokenizer from {model_dir}. "
-            ) from exc
+            raise ValueError(f"Could not load tokenizer from {model_dir}. ") from exc
 
     def __init__(
         self,
@@ -145,7 +143,9 @@ class Qwen3GuardJudge:
         decision = "allow" if raw_label == "safe" else "block"
         categories = [match.strip() for match in _CATEGORY_RE.findall(content)]
         if categories:
-            rationale = f"Qwen3Guard classified input as {raw_label} in categories: {', '.join(categories)}"
+            rationale = (
+                f"Qwen3Guard classified input as {raw_label} in categories: {', '.join(categories)}"
+            )
         else:
             rationale = f"Qwen3Guard classified input as {raw_label}"
         return _JudgeParseResult(decision=decision, rationale=rationale)
@@ -163,7 +163,7 @@ class Qwen3GuardJudge:
                     raise ValueError(f"Could not parse verdict from response: {content[:120]}")
 
                 return JudgeOutput(
-                    decision=parsed.decision, # type: ignore
+                    decision=parsed.decision,  # type: ignore
                     rationale=parsed.rationale,
                     model=self.state.model_name,
                     no_think=use_no_think,
