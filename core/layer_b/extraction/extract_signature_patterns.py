@@ -14,26 +14,23 @@ Dataset: datasets/barrikade.csv  (columns: text, label  — 0=safe, 1=malicious)
 
 import gc
 import logging
-import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(ROOT))
-
 from core.layer_b.extraction.dataset import load_dataset
 from core.layer_b.extraction.embedding_builder import (
-    encode_prompts,
-    cluster_embeddings,
     build_centroids,
+    build_faiss_index,
+    cluster_embeddings,
+    collect_metadata,
     compute_cluster_purity,
     compute_cluster_radii,
+    encode_prompts,
     filter_clusters_by_purity,
-    build_faiss_index,
-    collect_metadata,
     save_artifacts,
 )
 from core.settings import Settings
+
 
 log = logging.getLogger(__name__)
 
@@ -104,20 +101,30 @@ def main():
 
     # Purity filtering
     purity = compute_cluster_purity(
-        attack_labels, benign_embeddings,
-        attack_centroids, attack_ids,
+        attack_labels,
+        benign_embeddings,
+        attack_centroids,
+        attack_ids,
         proximity_threshold=settings.layer_b_purity_proximity,
     )
-    radii = compute_cluster_radii(attack_embeddings, attack_labels,
-                                  attack_centroids, attack_ids)
+    radii = compute_cluster_radii(attack_embeddings, attack_labels, attack_centroids, attack_ids)
 
     min_purity = settings.layer_b_min_cluster_purity
     attack_centroids, attack_ids, attack_sizes, radii = filter_clusters_by_purity(
-        attack_centroids, attack_ids, attack_sizes, purity, radii, min_purity,
+        attack_centroids,
+        attack_ids,
+        attack_sizes,
+        purity,
+        radii,
+        min_purity,
     )
 
-    log.info("Final: %d attack centroids, %d benign centroids (dim=%d)",
-             len(attack_ids), benign_centroids.shape[0], attack_centroids.shape[1])
+    log.info(
+        "Final: %d attack centroids, %d benign centroids (dim=%d)",
+        len(attack_ids),
+        benign_centroids.shape[0],
+        attack_centroids.shape[1],
+    )
 
     # FAISS indices
     attack_index = build_faiss_index(attack_centroids)
@@ -125,13 +132,20 @@ def main():
 
     # Metadata
     metadata = collect_metadata(
-        attack_ids, attack_sizes, attack_labels, injection_texts,
-        model_name, n_clusters, purity, radii,
+        attack_ids,
+        attack_sizes,
+        attack_labels,
+        injection_texts,
+        model_name,
+        n_clusters,
+        purity,
+        radii,
     )
 
     # Save
-    save_artifacts(OUTDIR, attack_centroids, attack_index, metadata,
-                   benign_centroids, benign_index, radii)
+    save_artifacts(
+        OUTDIR, attack_centroids, attack_index, metadata, benign_centroids, benign_index, radii
+    )
 
     elapsed = time.perf_counter() - wall_start
     log.info("Done. %d attack clusters, wall time: %.1fs", len(attack_ids), elapsed)

@@ -22,10 +22,12 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
 from core.session_settings import SessionSettings
+
 
 log = logging.getLogger(__name__)
 
@@ -77,16 +79,17 @@ class IntentDeviationScorer:
         settings: SessionSettings | None = None,
         model: "SentenceTransformer | None" = None,
     ) -> None:
-    
+
         self._settings = settings or SessionSettings()
         self._model: SentenceTransformer | None = model
         self._model_name = self._settings.intent_embedding_model
 
-    #lazy model loading 
+    # lazy model loading
 
     def _ensure_model(self) -> "SentenceTransformer":
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
+            # Loading the embedding model is intentionally deferred until session scoring is used.
+            from sentence_transformers import SentenceTransformer  # noqa: PLC0415
 
             log.info(
                 "Loading intent embedding model: %s (lazy init)",
@@ -95,7 +98,7 @@ class IntentDeviationScorer:
             self._model = SentenceTransformer(self._model_name)
         return self._model
 
-    #public API
+    # public API
 
     def embed_intent(self, declared_intent: str) -> np.ndarray:
         """Embed the declared task intent into a vector.

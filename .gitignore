@@ -41,6 +41,7 @@ venv
 .python-version
 .coverage
 .vscode
+*.code-workspace
 .cache
 .env
 

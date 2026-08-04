@@ -1,6 +1,8 @@
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Any
+
 from models.LayerResult import LayerResult
+
 
 @dataclass
 class LayerDResult(LayerResult):
@@ -11,7 +13,7 @@ class LayerDResult(LayerResult):
     confidence_score: float
     processing_time_ms: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "verdict": self.verdict,
             "probability_score": self.probability_score,

@@ -5,7 +5,15 @@ import numpy as np
 import pandas as pd
 
 
-def evaluate_policy(df, flag_thr, block_thr, block_min_margin, safe_recovery_max_attack_sim, safe_recovery_min_benign_sim, safe_recovery_max_margin, ):
+def evaluate_policy(
+    df,
+    flag_thr,
+    block_thr,
+    block_min_margin,
+    safe_recovery_max_attack_sim,
+    safe_recovery_min_benign_sim,
+    safe_recovery_max_margin,
+):
     attack = df["layer_b_attack_similarity"].to_numpy()
     benign = df["layer_b_benign_similarity"].to_numpy()
     margin = df["layer_b_margin"].to_numpy()
@@ -67,8 +75,12 @@ def evaluate_policy(df, flag_thr, block_thr, block_min_margin, safe_recovery_max
 def main():
     parser = argparse.ArgumentParser(description="Constrained threshold sweep for Layer B")
     parser.add_argument("--input", required=True, help="CSV from tests/layer_b/test_layer_b.py")
-    parser.add_argument("--max-mal-allow", type=float, default=0.005, help="Max malicious allow rate")
-    parser.add_argument("--min-block-precision", type=float, default=0.90, help="Min block precision")
+    parser.add_argument(
+        "--max-mal-allow", type=float, default=0.005, help="Max malicious allow rate"
+    )
+    parser.add_argument(
+        "--min-block-precision", type=float, default=0.90, help="Min block precision"
+    )
     parser.add_argument("--top", type=int, default=20, help="How many best rows to print")
     parser.add_argument("--output", default="test_results/ablation/layer_b_threshold_sweep.csv")
     args = parser.parse_args()
@@ -131,7 +143,7 @@ def main():
     feasible = feasible.sort_values(
         by=["safe_block_rate", "safe_allow_rate", "flag_rate"],
         ascending=[True, False, True],
-    ) # type: ignore
+    )  # type: ignore
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)

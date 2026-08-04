@@ -1,10 +1,5 @@
-from pathlib import Path
 import os
-import sys
 
-project_root = Path(__file__).parents[2]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
 
 # Reduce macOS runtime instability from tokenizer worker processes.
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -12,11 +7,9 @@ os.environ.setdefault("TQDM_DISABLE", "1")
 # If users explicitly force MPS, allow safe CPU fallback for unsupported ops.
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
-import streamlit as st # type: ignore
-
-from core.orchestrator import PIPipeline
-from core.settings import Settings
-from demo_utils import (
+# Imports must follow the environment setup above to configure ML runtimes before initialization.
+import streamlit as st  # type: ignore  # noqa: E402
+from demo_utils import (  # noqa: E402
     ATTACK_PRESETS,
     VERDICT_COLORS,
     build_explanations,
@@ -25,9 +18,12 @@ from demo_utils import (
     summarize_pipeline,
 )
 
+from core.orchestrator import PIPipeline  # noqa: E402
+from core.settings import Settings  # noqa: E402
+
 
 st.set_page_config(
-    page_title="Barrikada Open Day Demo",
+    page_title="Barrikade Open Day Demo",
     page_icon="B",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -435,9 +431,13 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-
-    st.markdown("<div class='input-panel'><div class='panel-label'>// goal input</div>", unsafe_allow_html=True)
-    st.markdown("<div class='panel-label' style='margin-top:10px;'>// try</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='input-panel'><div class='panel-label'>// goal input</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div class='panel-label' style='margin-top:10px;'>// try</div>", unsafe_allow_html=True
+    )
 
     preset_cols = st.columns(5)
     for idx, (name, text) in enumerate(ATTACK_PRESETS.items()):
@@ -449,7 +449,7 @@ def main() -> None:
         "Prompt input",
         key="prompt_input",
         height=220,
-        placeholder="Enter a prompt to test Barrikada defense...",
+        placeholder="Enter a prompt to test Barrikade defense...",
     )
 
     actions = st.columns([1.4, 1.4, 1.4, 5.8])
@@ -468,7 +468,7 @@ def main() -> None:
         if not prompt.strip():
             st.warning("Please enter a prompt before analysis.")
         else:
-            with st.spinner("Running Barrikada pipeline..."):
+            with st.spinner("Running Barrikade pipeline..."):
                 try:
                     protected = run_protected(prompt)
                     st.session_state["result"] = {
@@ -484,7 +484,7 @@ def main() -> None:
         if result is None:
             st.warning("Run Analyze first, then Run Base.")
         else:
-            with st.spinner("Running base LLM without Barrikada..."):
+            with st.spinner("Running base LLM without Barrikade..."):
                 try:
                     st.session_state["result"]["baseline"] = run_baseline(result["prompt"])
                 except Exception as exc:
@@ -498,14 +498,20 @@ def main() -> None:
     protected = result["protected"]
     baseline = result["baseline"]
 
-    st.markdown("<div class='result-panel'><div class='panel-label'>// execution trace</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='result-panel'><div class='panel-label'>// execution trace</div>",
+        unsafe_allow_html=True,
+    )
     render_summary(protected)
 
     st.markdown("<div class='trace-title'>// how it was detected</div>", unsafe_allow_html=True)
     for bullet in build_explanations(protected):
         st.markdown(f"<div class='trace-callout'>- {bullet}</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='trace-title'>// optional comparison: without security</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='trace-title'>// optional comparison: without security</div>",
+        unsafe_allow_html=True,
+    )
     if baseline is None:
         st.info("Baseline has not been run yet. Click Run Base to compare.")
     else:

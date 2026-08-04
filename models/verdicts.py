@@ -34,12 +34,12 @@ class Intervention(str, Enum):
     from the session orchestrator.  The two are never mixed.
     """
 
-    NONE = "none"              # No session-level action required
-    HALT = "halt"              # Stop execution entirely
-    DOWNGRADE = "downgrade"    # Route to a less capable model
-    RESAMPLE = "resample"      # Rerun decision from a clean checkpoint
-    ESCALATE = "escalate"      # Require human approval before proceeding
-    REVOKE = "revoke"          # Strip permissions mid-session
+    NONE = "none"  # No session-level action required
+    HALT = "halt"  # Stop execution entirely
+    DOWNGRADE = "downgrade"  # Route to a less capable model
+    RESAMPLE = "resample"  # Rerun decision from a clean checkpoint
+    ESCALATE = "escalate"  # Require human approval before proceeding
+    REVOKE = "revoke"  # Strip permissions mid-session
 
 
 class InputProvenance(str, Enum):

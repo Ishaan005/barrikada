@@ -13,7 +13,9 @@ def main() -> None:
     for text in SAMPLES:
         result = pipeline.detect(text)
         print(f"input={text!r}")
-        print(f"verdict={result.final_verdict} layer={result.decision_layer} confidence={result.confidence_score:.2f}")
+        print(
+            f"verdict={result.final_verdict} layer={result.decision_layer} confidence={result.confidence_score:.2f}"
+        )
         print("-")
 
 

@@ -33,7 +33,7 @@ To trigger the download manually or skip auto-download:
   ```bash
   export BARRIKADA_SKIP_IMPORT_BUNDLE_CHECK=1
   ```
-For more information, see [MODEL_HOSTING.md](file:///Users/ishaan/Documents/Data%20Science/FYP/code/docs/MODEL_HOSTING.md).
+For more information, see [MODEL_HOSTING.md](MODEL_HOSTING.md).
 
 ---
 

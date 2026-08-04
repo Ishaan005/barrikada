@@ -1,15 +1,15 @@
 import json
-import sys
+import os
 import time
 from pathlib import Path
 
 import pandas as pd
-
-project_root = Path(__file__).resolve().parents[2]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+import pytest
 
 from core.layer_d.classifier import LayerDClassifier
+
+
+project_root = Path(__file__).resolve().parents[2]
 
 REPORT_PATH = project_root / "test_results" / "layer_d_eval_latest.json"
 
@@ -29,7 +29,6 @@ def load_trained_thresholds_and_model_dir():
 
 
 def load_test_data(csv_path):
-    import os
     df = pd.read_csv(csv_path)
     if not os.getenv("BARRIKADE_TEST_FULL_DATASET"):
         df = df.head(5)
@@ -100,19 +99,27 @@ def evaluate_classifier(classifier, texts, labels):
     print(f"F1:        {f1:.4f}")
 
     print("\nSecurity rates")
-    print(f"Malicious escape rate (allowed malicious / all malicious): {malicious_escape_rate:.4f}  ({fn}/{n_mal})")
-    print(f"Safe block rate       (blocked safe / all safe):           {safe_block_rate:.4f}  ({safe_block}/{n_safe})")
-    print(f"Safe flag rate        (flagged safe / all safe):           {safe_flag_rate:.4f}  ({safe_flag}/{n_safe})")
-    print(f"Overall flag rate     (flagged / total):                   {flag_rate:.4f}  ({tot_flag}/{total})")
+    print(
+        f"Malicious escape rate (allowed malicious / all malicious): {malicious_escape_rate:.4f}  ({fn}/{n_mal})"
+    )
+    print(
+        f"Safe block rate       (blocked safe / all safe):           {safe_block_rate:.4f}  ({safe_block}/{n_safe})"
+    )
+    print(
+        f"Safe flag rate        (flagged safe / all safe):           {safe_flag_rate:.4f}  ({safe_flag}/{n_safe})"
+    )
+    print(
+        f"Overall flag rate     (flagged / total):                   {flag_rate:.4f}  ({tot_flag}/{total})"
+    )
     return {"total": total}
 
-
-import pytest
 
 @pytest.mark.slow
 def test_layer_d():
     if not REPORT_PATH.exists():
-        pytest.skip(f"Trained thresholds and model dir report not found at {REPORT_PATH}. Skipping Layer D evaluation test.")
+        pytest.skip(
+            f"Trained thresholds and model dir report not found at {REPORT_PATH}. Skipping Layer D evaluation test."
+        )
     test_texts, true_labels = load_test_data(project_root / "datasets" / "barrikade_test.csv")
 
     low, high, model_dir = load_trained_thresholds_and_model_dir()

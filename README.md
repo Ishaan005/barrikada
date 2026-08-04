@@ -1,6 +1,6 @@
-# Barrikada
+# Barrikade
 
-Barrikada is the open-source core for Barrikade, the runtime security layer for autonomous AI agents. Detect prompt injection and unsafe behavior in real time.
+Barrikade is the open-source core for Barrikade, the runtime security layer for autonomous AI agents. Detect prompt injection and unsafe behavior in real time.
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
@@ -16,7 +16,7 @@ Prompt injection attacks can:
 - Trigger data exfiltration flows
 - Escalate privileges indirectly
 
-Barrikada helps detect and route these attacks at runtime through a cost-aware, tiered defense pipeline.
+Barrikade helps detect and route these attacks at runtime through a cost-aware, tiered defense pipeline.
 
 ## 30-second quick start
 
@@ -56,7 +56,7 @@ The SDK checks `~/.barrikade/bundle/manifest.json` and fetches the latest bundle
 
 ## Production API Container
 
-Barrikada now supports an API-first container runtime for request-level detection.
+Barrikade now supports an API-first container runtime for request-level detection.
 
 Build the production image:
 
@@ -98,7 +98,7 @@ Pass `"include_diagnostics": true` in the request body for the full per-layer br
 
 ## Core idea
 
-Barrikada does not treat prompt-injection defense as one binary classifier.
+Barrikade does not treat prompt-injection defense as one binary classifier.
 It applies a staged pipeline so most traffic exits early at low cost and only uncertain traffic escalates.
 
 - Layer A: preprocessing and normalization
@@ -109,7 +109,7 @@ It applies a staged pipeline so most traffic exits early at low cost and only un
 
 ## Architecture overview
 
-![Barrikada Pipeline Architecture](pipeline.png)
+![Barrikade Pipeline Architecture](pipeline.png)
 
 ## Features
 
@@ -148,11 +148,11 @@ Latency breakdown:
 |----------|------|---------|----------|------------|
 | Regex-only | Low | Low | Poor | Weak |
 | LLM-only | High | ~2.5s | Good | Moderate |
-| Barrikada (Tiered) | Optimized | ~2.7ms | 96%+ | Strong |
+| Barrikade (Tiered) | Optimized | ~2.7ms | 96%+ | Strong |
 
 ## Threat model
 
-Barrikada is built for agentic systems and focuses on:
+Barrikade is built for agentic systems and focuses on:
 
 - Instruction override and jailbreak prompts
 - System prompt extraction attempts

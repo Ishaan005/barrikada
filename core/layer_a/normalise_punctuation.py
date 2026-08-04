@@ -1,5 +1,6 @@
-import ftfy
 import re
+
+import ftfy
 
 
 def collapse_separated_characters(text):
@@ -17,27 +18,28 @@ def collapse_separated_characters(text):
 
     # Collapse other separators between chars (dots, dashes, underscores)
     # "i.g.n.o.r.e" or "i-g-n-o-r-e"
-    text = re.sub(
-        r"(?:\w[._\-]){4,}\w", lambda m: re.sub(r"[._\-]", "", m.group()), text
-    )
+    text = re.sub(r"(?:\w[._\-]){4,}\w", lambda m: re.sub(r"[._\-]", "", m.group()), text)
 
     return text
 
 
 def normalise_punctuation_and_whitespace(text):
     """Use ftfy to fix punctuation and whitespace issues."""
-    
+
     # Step 1: Canonicalize newlines
     fixed = text.replace("\r\n", "\n").replace("\r", "\n")
-    
+
     # Step 2: ftfy fixes mojibake and other Unicode issues
     fixed = ftfy.fix_text(fixed)
 
     # Step 3: Normalize quote characters to ASCII equivalents
     quotes_map = {
-        """: '"', """: '"',
-        "'": "'", "'": "'",
-        "«": '"', "»": '"',
+        "“": '"',
+        "”": '"',
+        "‘": "'",
+        "’": "'",
+        "«": '"',
+        "»": '"',
     }
 
     for k, v in quotes_map.items():
@@ -45,9 +47,9 @@ def normalise_punctuation_and_whitespace(text):
 
     # Step 4: Normalize dash/minus variants
     dashes_map = {
-        "–": "-",   # en-dash
-        "—": "-",   # em-dash
-        "−": "-",   # minus
+        "–": "-",  # en-dash
+        "—": "-",  # em-dash
+        "−": "-",  # minus
     }
 
     for k, v in dashes_map.items():

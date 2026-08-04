@@ -1,12 +1,19 @@
-import core.onnx_patch
 import os
+
 
 os.environ.setdefault("BARRIKADA_SKIP_IMPORT_BUNDLE_CHECK", "1")
 os.environ.setdefault("BARRIKADA_AUTO_DOWNLOAD_ARTIFACTS", "0")
 
+import core.onnx_patch  # noqa: E402, F401
+
+
+# Apply the Optimum compatibility patch before loading sentence-transformers.
+# isort: split
 import hashlib
+
 import numpy as np
 import sentence_transformers
+
 
 # Store the original class
 RealSentenceTransformer = sentence_transformers.SentenceTransformer
@@ -44,7 +51,9 @@ class MockSentenceTransformer(RealSentenceTransformer):
             )
 
         def make_unit_vector(seed_str, dim):
-            seed = int(hashlib.md5(seed_str.encode("utf-8"), usedforsecurity=False).hexdigest(), 16) % (2**32)
+            seed = int(
+                hashlib.md5(seed_str.encode("utf-8"), usedforsecurity=False).hexdigest(), 16
+            ) % (2**32)
             rng = np.random.default_rng(seed)
             vec = rng.normal(size=dim)
             return vec / np.linalg.norm(vec)

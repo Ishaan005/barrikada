@@ -8,7 +8,7 @@ from core.agent import DEFAULT_MODEL_NAME, evaluate, interactive
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python scripts/agent.py",
-        description="Compatibility wrapper for Barrikada agent workflows.",
+        description="Compatibility wrapper for Barrikade agent workflows.",
     )
     parser.add_argument(
         "mode",

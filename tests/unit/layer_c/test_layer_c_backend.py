@@ -14,17 +14,17 @@ Skipped if the real Layer C model artifacts aren't present locally (run
 scripts/bundling/gcs_download.py to populate core/models/layer_c/, then
 core/layer_c/export_layer_c_onnx.py to produce the .onnx sibling).
 """
+
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
 from core.layer_c.classifier import Classifier
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 
 JOBLIB_PATH = PROJECT_ROOT / "core" / "models" / "layer_c" / "classifier.joblib"
 ONNX_PATH = PROJECT_ROOT / "core" / "models" / "layer_c" / "classifier.onnx"

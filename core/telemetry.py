@@ -5,9 +5,10 @@ import random
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.__version__ import __version__ as barrikade_version
+
 
 # Static OTel resource conventions
 OTEL_RESOURCE = {
@@ -16,24 +17,27 @@ OTEL_RESOURCE = {
     "telemetry.sdk.language": "python",
 }
 
+
 class TelemetryEngine:
     """A clean, thread-safe JSONL logging engine for Centralized Telemetry & Audit in Barrikade."""
 
-    def __init__(self, settings: Optional[Any] = None) -> None:
+    def __init__(self, settings: Any | None = None) -> None:
         self._settings = settings
         self._logger = logging.getLogger("barrikade.telemetry")
-        
+
         # Golden Signals threading counters
         self._counters_lock = threading.Lock()
-        self._pipeline_run_count = 0        # Traffic signal
-        self._pipeline_error_count = 0      # Errors signal
-        self._active_pipelines = 0          # Saturation signal
-        self._active_pipelines_peak = 0     # Peak saturation high-water mark
+        self._pipeline_run_count = 0  # Traffic signal
+        self._pipeline_error_count = 0  # Errors signal
+        self._active_pipelines = 0  # Saturation signal
+        self._active_pipelines_peak = 0  # Peak saturation high-water mark
 
     @property
     def settings(self) -> Any:
         if self._settings is None:
-            from core.settings import Settings
+            # Avoid constructing settings until telemetry is first used.
+            from core.settings import Settings  # noqa: PLC0415
+
             self._settings = Settings()
         return self._settings
 
@@ -52,7 +56,7 @@ class TelemetryEngine:
             if had_error:
                 self._pipeline_error_count += 1
 
-    def get_golden_signals(self) -> Dict[str, int]:
+    def get_golden_signals(self) -> dict[str, int]:
         """Snapshot of the current Four Golden Signals counters."""
         with self._counters_lock:
             return {
@@ -62,7 +66,7 @@ class TelemetryEngine:
                 "active_pipelines_peak": self._active_pipelines_peak,
             }
 
-    def _normalize_trace_id(self, trace_id: Optional[str]) -> Optional[str]:
+    def _normalize_trace_id(self, trace_id: str | None) -> str | None:
         """Pad/truncate trace_id to W3C standard (32 hex characters) if it's hex, otherwise return as is."""
         if not trace_id:
             return None
@@ -71,7 +75,7 @@ class TelemetryEngine:
             return clean.zfill(32)[:32] if clean else None
         return trace_id
 
-    def _normalize_span_id(self, span_id: Optional[str]) -> Optional[str]:
+    def _normalize_span_id(self, span_id: str | None) -> str | None:
         """Pad/truncate span_id to W3C standard (16 hex characters) if it's hex, otherwise return as is."""
         if not span_id:
             return None
@@ -80,7 +84,7 @@ class TelemetryEngine:
             return clean.zfill(16)[:16] if clean else None
         return span_id
 
-    def _should_sample(self, trace_id: Optional[str]) -> bool:
+    def _should_sample(self, trace_id: str | None) -> bool:
         """Determine if a safe event should be logged based on sample rate."""
         try:
             rate = self.settings.telemetry_safe_sample_rate
@@ -94,7 +98,9 @@ class TelemetryEngine:
         # Deterministic sampling based on trace_id for consistency
         norm_trace = self._normalize_trace_id(trace_id)
         if norm_trace:
-            hash_val = int(hashlib.md5(norm_trace.encode(), usedforsecurity=False).hexdigest()[:8], 16)
+            hash_val = int(
+                hashlib.md5(norm_trace.encode(), usedforsecurity=False).hexdigest()[:8], 16
+            )
             return (hash_val / 0xFFFFFFFF) < rate
 
         return random.random() < rate  # nosec B311
@@ -118,13 +124,13 @@ class TelemetryEngine:
     def emit(
         self,
         event_type: str,
-        workload_id: Optional[str] = None,
-        trace_id: Optional[str] = None,
-        span_id: Optional[str] = None,
-        payload: Optional[Dict[str, Any]] = None,
-        metrics: Optional[Dict[str, Any]] = None,
-        client_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        workload_id: str | None = None,
+        trace_id: str | None = None,
+        span_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+        metrics: dict[str, Any] | None = None,
+        client_id: str | None = None,
+        tenant_id: str | None = None,
     ) -> None:
         """Format and log telemetry events as a single-line JSON.
 

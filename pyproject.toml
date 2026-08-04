@@ -8,7 +8,8 @@ dynamic = ["version"]
 description = "Runtime prompt-injection detection for AI agents."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
   { name = "Barrikade" }
 ]
@@ -32,7 +33,6 @@ keywords = ["ai", "llm", "security", "prompt-injection", "agents"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -56,9 +56,6 @@ include-package-data = false
 include = ["barrikade", "core", "core.*", "models", "models.*"]
 exclude = ["tests", "tests.*", "docs", "docs.*", "examples", "examples.*", "demos", "demos.*"]
 
-[tool.pyrefly]
-search_path = ["venv/lib/python3.11/site-packages"]
-
 [tool.pytest.ini_options]
 # Adds the repo root to sys.path during pytest discovery so tests can
 # `from core.X import ...` without needing `PYTHONPATH=.` set externally.
@@ -74,6 +71,7 @@ markers = [
 version = {attr = "core.__version__.__version__"}
 
 [tool.ruff]
+required-version = "==0.15.14"
 target-version = "py310"
 line-length = 100
 exclude = [
@@ -88,7 +86,19 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "PLC0415", "PLC2701"]
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "I",
+    "PLC0415",
+    "PLC2701",
+    "UP006",
+    "UP007",
+    "UP035",
+    "UP045",
+]
 preview = true
 explicit-preview-rules = true
 

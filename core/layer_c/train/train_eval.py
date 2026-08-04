@@ -1,5 +1,5 @@
-from pathlib import Path
 import hashlib
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -16,6 +16,7 @@ from core.layer_c.train.utils import (
     top_feature_importance,
 )
 from core.settings import Settings
+
 
 _settings = Settings()
 SEED = _settings.layer_c_seed
@@ -43,7 +44,9 @@ def encode_texts(texts, model, batch_size=None, use_cache=True):
             print(f"[emb cache] Loading cached embeddings from {cache_path.name}")
             return np.load(cache_path)
 
-    emb = model.encode(texts_list, batch_size=batch_size, show_progress_bar=True, normalize_embeddings=True)
+    emb = model.encode(
+        texts_list, batch_size=batch_size, show_progress_bar=True, normalize_embeddings=True
+    )
 
     if use_cache and cache_path is not None:
         np.save(cache_path, emb)
@@ -146,10 +149,7 @@ def train_eval(X, y, low=None, high=None):
         X_train = X_train_aug
         y_train = y_train_aug
     else:
-        print(
-            "Skipping hard-negative retrain: "
-            f"mined={mined_idx.size} < min_required={min_needed}"
-        )
+        print(f"Skipping hard-negative retrain: mined={mined_idx.size} < min_required={min_needed}")
 
     model.set_params(device="cpu")
 
@@ -158,8 +158,12 @@ def train_eval(X, y, low=None, high=None):
 
     calibrator = IsotonicRegression(out_of_bounds="clip")
     calibrator.fit(np.asarray(val_scores_raw, dtype=float), y_val.to_numpy().astype(int))
-    val_scores = np.clip(np.asarray(calibrator.predict(np.asarray(val_scores_raw, dtype=float))), 0.0, 1.0)
-    test_scores = np.clip(np.asarray(calibrator.predict(np.asarray(test_scores_raw, dtype=float))), 0.0, 1.0)
+    val_scores = np.clip(
+        np.asarray(calibrator.predict(np.asarray(val_scores_raw, dtype=float))), 0.0, 1.0
+    )
+    test_scores = np.clip(
+        np.asarray(calibrator.predict(np.asarray(test_scores_raw, dtype=float))), 0.0, 1.0
+    )
 
     artifact = {
         "model": model,
@@ -175,7 +179,9 @@ def train_eval(X, y, low=None, high=None):
             "hard_negative_score_min": float(mine_min),
             "hard_negative_score_max": float(mine_max),
             "hard_negative_use_routing_band": bool(s.layer_c_hard_negative_use_routing_band),
-            "hard_negative_augment_multiplier": int(max(0, s.layer_c_hard_negative_augment_multiplier)),
+            "hard_negative_augment_multiplier": int(
+                max(0, s.layer_c_hard_negative_augment_multiplier)
+            ),
         },
     }
 

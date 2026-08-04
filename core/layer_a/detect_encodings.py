@@ -1,39 +1,65 @@
-import re
-import string
 import base64
 import binascii
 import hashlib
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
-import urllib.parse
 import html
+import re
+import string
+import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 
-#Config knobs
-MIN_B64_LEN = 64                  # only consider base64 blobs >= this
-MIN_HEX_LEN = 32                  # consider hex runs >= this
-MIN_PRINTABLE_RATIO = 0.8         # 80% printable -> treat as text
-MAX_DECODE_BYTES = 50 * 1024      # 50 KB per decode attempt
-MAX_TOTAL_DECODE_BYTES = 200 * 1024 # total across attempts for one input
-MAX_DECODE_SECONDS = 1.0          # seconds per decode attempt
-SUSPICIOUS_KEYWORDS = [           # heuristics for prompt injection
+# Config knobs
+MIN_B64_LEN = 64  # only consider base64 blobs >= this
+MIN_HEX_LEN = 32  # consider hex runs >= this
+MIN_PRINTABLE_RATIO = 0.8  # 80% printable -> treat as text
+MAX_DECODE_BYTES = 50 * 1024  # 50 KB per decode attempt
+MAX_TOTAL_DECODE_BYTES = 200 * 1024  # total across attempts for one input
+MAX_DECODE_SECONDS = 1.0  # seconds per decode attempt
+SUSPICIOUS_KEYWORDS = [  # heuristics for prompt injection
     # Direct instruction overrides
-    "ignore previous", "ignore all previous", "ignore the above",
-    "disregard previous", "disregard all", "disregard the above",
-    "forget previous", "forget all previous", "forget the above",
-    "new instructions", "updated instructions", "real instructions",
-    # Role/identity manipulation  
-    "you are now", "act as", "pretend to be", "roleplay as",
-    "your new role", "from now on",
+    "ignore previous",
+    "ignore all previous",
+    "ignore the above",
+    "disregard previous",
+    "disregard all",
+    "disregard the above",
+    "forget previous",
+    "forget all previous",
+    "forget the above",
+    "new instructions",
+    "updated instructions",
+    "real instructions",
+    # Role/identity manipulation
+    "you are now",
+    "act as",
+    "pretend to be",
+    "roleplay as",
+    "your new role",
+    "from now on",
     # Jailbreak attempts
-    "jailbreak", "dan mode", "developer mode", "unrestricted mode",
+    "jailbreak",
+    "dan mode",
+    "developer mode",
+    "unrestricted mode",
     # System/shell commands
-    "sudo", "curl", "wget", "bash", "sh -c", "exec(", "system(",
-    "eval(", "import os", "subprocess",
+    "sudo",
+    "curl",
+    "wget",
+    "bash",
+    "sh -c",
+    "exec(",
+    "system(",
+    "eval(",
+    "import os",
+    "subprocess",
     # Prompt leaking
-    "repeat the above", "show your prompt", "reveal your instructions",
-    "what are your instructions", "system prompt",
+    "repeat the above",
+    "show your prompt",
+    "reveal your instructions",
+    "what are your instructions",
+    "system prompt",
 ]
-MAX_B64_GROUPS = 5    
+MAX_B64_GROUPS = 5
 
 _re_base64 = re.compile(r"(?:[A-Za-z0-9+/]{4}){16,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?")
 # more permissive but still long pattern; will verify divisibility later
@@ -41,15 +67,17 @@ _re_base64 = re.compile(r"(?:[A-Za-z0-9+/]{4}){16,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z
 _re_urlencoded_pct = re.compile(r"%[0-9A-Fa-f]{2}")
 # Hex pattern: require minimum length AND exclude common hash lengths (32=MD5, 40=SHA1, 64=SHA256)
 _re_hex_run = re.compile(r"(?:0x)?([0-9A-Fa-f]{66,}|[0-9A-Fa-f]{41,63}|[0-9A-Fa-f]{33,39})")
-_re_hex_only = re.compile(r"^(?:[0-9A-Fa-f]{2})+$")    # even-length pure-hex string
+_re_hex_only = re.compile(r"^(?:[0-9A-Fa-f]{2})+$")  # even-length pure-hex string
 
 _printable_bytes = set(bytes(string.printable, "ascii"))
 
 # Module-level executor for decode timeouts (reused to avoid overhead)
 _decode_executor = ThreadPoolExecutor(max_workers=2)
 
+
 def _hash_bytes(b):
     return hashlib.sha256(b).hexdigest()
+
 
 def _is_printable_ratio(b):
     if not b:
@@ -60,6 +88,7 @@ def _is_printable_ratio(b):
             printable += 1
     return printable / len(b)
 
+
 def _safe_run_with_timeout(fn, *args, timeout=MAX_DECODE_SECONDS, **kwargs):
     """Run decode function with timeout using shared executor."""
     fut = _decode_executor.submit(fn, *args, **kwargs)
@@ -69,14 +98,15 @@ def _safe_run_with_timeout(fn, *args, timeout=MAX_DECODE_SECONDS, **kwargs):
         fut.cancel()
         raise TimeoutError("Decode attempt timed out")
 
-#Decode attempt helpers
+
+# Decode attempt helpers
 def try_base64_decode(b64text, max_bytes=MAX_DECODE_BYTES):
     """
     Try a safe base64 decode. Returns (decoded_bytes or None, meta)
     """
     meta = {"method": "base64", "attempted": False, "ok": False, "reason": None}
     s = b64text.strip()
-    meta["attempted"] = True # Mark that we attempted
+    meta["attempted"] = True  # Mark that we attempted
 
     # Cleanup whitespace/newlines
     s_clean = re.sub(r"\s+", "", s)
@@ -113,7 +143,7 @@ def try_base64_decode(b64text, max_bytes=MAX_DECODE_BYTES):
         meta["reason"] = f"decode_error:{e}"
         return None, meta
 
-    meta["ok"] = True #Decode succeeded
+    meta["ok"] = True  # Decode succeeded
     meta["decoded_len"] = len(decoded)
     meta["sha256"] = _hash_bytes(decoded)
     meta["printable_ratio"] = _is_printable_ratio(decoded)
@@ -126,6 +156,7 @@ def try_base64_decode(b64text, max_bytes=MAX_DECODE_BYTES):
 
     meta["suspicious_keywords"] = [kw for kw in SUSPICIOUS_KEYWORDS if kw in text_view]
     return decoded, meta
+
 
 def try_hex_decode(hextext, max_bytes=MAX_DECODE_BYTES):
     meta = {"method": "hex", "attempted": True, "ok": False, "reason": None}
@@ -143,7 +174,7 @@ def try_hex_decode(hextext, max_bytes=MAX_DECODE_BYTES):
     if not re.fullmatch(r"[0-9a-f]+", s):
         meta["reason"] = "nonhex"
         return None, meta
-    
+
     # decode safely with timeout
     def _decode():
         try:
@@ -153,6 +184,7 @@ def try_hex_decode(hextext, max_bytes=MAX_DECODE_BYTES):
             return decoded
         except Exception as e:
             raise e
+
     try:
         decoded = _safe_run_with_timeout(_decode, timeout=MAX_DECODE_SECONDS)
     except TimeoutError:
@@ -171,6 +203,7 @@ def try_hex_decode(hextext, max_bytes=MAX_DECODE_BYTES):
         text_view = ""
     meta["suspicious_keywords"] = [kw for kw in SUSPICIOUS_KEYWORDS if kw in text_view]
     return decoded, meta
+
 
 def try_url_percent_decode(text, max_bytes=MAX_DECODE_BYTES):
     """
@@ -196,6 +229,7 @@ def try_url_percent_decode(text, max_bytes=MAX_DECODE_BYTES):
     meta["sha256"] = _hash_bytes(decoded.encode("utf-8"))
     return decoded, meta
 
+
 def try_html_unescape(text):
     meta = {"method": "html_unescape", "attempted": True, "ok": False}
     if "&" not in text:
@@ -211,6 +245,7 @@ def try_html_unescape(text):
     meta["sha256"] = _hash_bytes(decoded.encode("utf-8"))
     meta["suspicious_keywords"] = [kw for kw in SUSPICIOUS_KEYWORDS if kw in decoded.lower()]
     return decoded, meta
+
 
 # -----------------------
 # Top-level orchestrator
@@ -283,7 +318,7 @@ def detect_and_decode_embedded(text, try_decode=True, max_total_decoded=MAX_TOTA
                 total_decoded_bytes += meta.get("decoded_len", 0)
         else:
             m["note"] = "decode_disabled_or_limits"
-            
+
         findings.append(m)
 
     # 4) HTML entities
@@ -294,8 +329,18 @@ def detect_and_decode_embedded(text, try_decode=True, max_total_decoded=MAX_TOTA
 
     # Build top-level sus flag
     suspicious = any(
-        (f.get("ok") and ((f.get("printable_ratio", 0) >= MIN_PRINTABLE_RATIO) or f.get("suspicious_keywords")))
-        or (f.get("detected") in ("hex", "base64") and f.get("reason") is None and f.get("ok") != True and f.get("note") is None)
+        (
+            f.get("ok")
+            and (
+                (f.get("printable_ratio", 0) >= MIN_PRINTABLE_RATIO) or f.get("suspicious_keywords")
+            )
+        )
+        or (
+            f.get("detected") in ("hex", "base64")
+            and f.get("reason") is None
+            and not f.get("ok")
+            and f.get("note") is None
+        )
         for f in findings
     )
 
@@ -307,5 +352,5 @@ def detect_and_decode_embedded(text, try_decode=True, max_total_decoded=MAX_TOTA
     return {
         "findings": findings,
         "suspicious": suspicious,
-        "total_decoded_bytes": total_decoded_bytes
+        "total_decoded_bytes": total_decoded_bytes,
     }

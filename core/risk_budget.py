@@ -18,11 +18,12 @@ from typing import Any
 from core.session import (
     SessionEvent,
     SessionEventType,
-    SessionStoreBackend,
     SessionStatus,
+    SessionStoreBackend,
 )
 from core.session_settings import SessionSettings
 from models.verdicts import Intervention
+
 
 log = logging.getLogger(__name__)
 
@@ -99,12 +100,12 @@ class RiskBudgetEngine:
         session_store: SessionStoreBackend,
         settings: SessionSettings | None = None,
     ) -> None:
-    
+
         self._store = session_store
         self._settings = settings or SessionSettings()
 
     def _category_cost(self, category: RiskCategory) -> int:
-        """Look up the configured cost for a risk category.""" 
+        """Look up the configured cost for a risk category."""
         return self._settings.category_costs.get(category.value, 1)
 
     def assess_risk(
@@ -137,12 +138,14 @@ class RiskBudgetEngine:
             cost = self._category_cost(cat)
             if cost <= 0:
                 continue
-            risk_events.append(RiskEvent(
-                category=cat,
-                cost=cost,
-                description=desc or f"{cat.value} detected",
-                timestamp=now,
-            ))
+            risk_events.append(
+                RiskEvent(
+                    category=cat,
+                    cost=cost,
+                    description=desc or f"{cat.value} detected",
+                    timestamp=now,
+                )
+            )
             total_cost += cost
 
         if total_cost == 0:

@@ -1,15 +1,21 @@
-import regex
 import logging
 from collections import Counter
+
+import regex
 from confusable_homoglyphs import confusables
+
 
 logger = logging.getLogger(__name__)
 
-# Reference the paper 
+
+# Reference the paper
 def script_distribution(text):
     scripts = Counter()
     for ch in text:
-        match = regex.match(r"\p{Script=Latin}|\p{Script=Cyrillic}|\p{Script=Greek}|\p{Script=Arabic}|\p{Script=Han}", ch)
+        match = regex.match(
+            r"\p{Script=Latin}|\p{Script=Cyrillic}|\p{Script=Greek}|\p{Script=Arabic}|\p{Script=Han}",
+            ch,
+        )
         if match:
             if match.group(0):
                 if regex.match(r"\p{Script=Latin}", ch):
@@ -26,6 +32,7 @@ def script_distribution(text):
             scripts["Other"] += 1
     return dict(scripts)
 
+
 def detect_confusables(text, expected_script="Latin", threshold=0.1):
     scripts = script_distribution(text)
     total = sum(scripts.values())
@@ -33,7 +40,7 @@ def detect_confusables(text, expected_script="Latin", threshold=0.1):
     non_expected = total - expected_count
 
     if total:
-        percent_non_expected = (non_expected / total) 
+        percent_non_expected = non_expected / total
     else:
         percent_non_expected = 0.0
 
@@ -43,7 +50,7 @@ def detect_confusables(text, expected_script="Latin", threshold=0.1):
     is_dangerous = False
     is_mixed = False
     confusable_details = None
-    
+
     try:
         is_dangerous = confusables.is_dangerous(text)
         is_mixed = confusables.is_mixed_script(text)

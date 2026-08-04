@@ -1,20 +1,24 @@
-import core.onnx_patch
-import time
 import hashlib
 import json
 import logging
 import os
-import platform
+import time
 from pathlib import Path
 
+import core.onnx_patch  # noqa: F401
+
+
+# Keep the compatibility patch above ML libraries that import Optimum.
+# isort: split
 import numpy as np
 import torch
-from sklearn.neighbors import NearestNeighbors
 from sentence_transformers import SentenceTransformer
+from sklearn.neighbors import NearestNeighbors
 
 from core.settings import Settings
-from models.SignatureMatch import SignatureMatch, Severity
 from models.LayerBResult import LayerBResult
+from models.SignatureMatch import Severity, SignatureMatch
+
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +29,7 @@ class SignatureEngine:
         self._load_model()
         self._load_signatures()
 
-    #init
+    # init
     @staticmethod
     def _is_sentence_transformer_dir_ready(model_dir: Path) -> bool:
         required_files = [
@@ -52,9 +56,17 @@ class SignatureEngine:
             return str(prompt_encoder_path)
 
         missing = []
-        for file_name in ["config.json", "modules.json", "tokenizer.json", "model.safetensors|pytorch_model.bin"]:
+        for file_name in [
+            "config.json",
+            "modules.json",
+            "tokenizer.json",
+            "model.safetensors|pytorch_model.bin",
+        ]:
             if file_name == "model.safetensors|pytorch_model.bin":
-                if not any((prompt_encoder_path / name).exists() for name in ["model.safetensors", "pytorch_model.bin"]):
+                if not any(
+                    (prompt_encoder_path / name).exists()
+                    for name in ["model.safetensors", "pytorch_model.bin"]
+                ):
                     missing.append(file_name)
             elif not (prompt_encoder_path / file_name).exists():
                 missing.append(file_name)
@@ -92,7 +104,7 @@ class SignatureEngine:
             self.model = SentenceTransformer(
                 str(onnx_dir),
                 backend="onnx",
-                model_kwargs={"providers": ["CPUExecutionProvider"]}, #Inference is CPU only
+                model_kwargs={"providers": ["CPUExecutionProvider"]},  # Inference is CPU only
             )
             return
 
@@ -137,7 +149,9 @@ class SignatureEngine:
             )
         cpu_attack = None
         if self.index_backend == "faiss":
-            import faiss
+            # FAISS is needed only when the selected index backend uses it.
+            import faiss  # noqa: PLC0415
+
             self._faiss = faiss
             cpu_attack = faiss.read_index(str(attack_idx_path))
         self.attack_centroids = np.load(str(sig / "centroids.npy"))
@@ -181,8 +195,12 @@ class SignatureEngine:
 
         n_attack = self.attack_centroids.shape[0]
         n_benign = self.benign_centroids.shape[0] if self.benign_centroids is not None else 0
-        log.info("Loaded %d attack + %d benign centroids (dim=%d)",
-                 n_attack, n_benign, self.attack_centroids.shape[1])
+        log.info(
+            "Loaded %d attack + %d benign centroids (dim=%d)",
+            n_attack,
+            n_benign,
+            self.attack_centroids.shape[1],
+        )
 
     def _search(self, index, query, k):
         if self.index_backend == "faiss":
@@ -215,14 +233,14 @@ class SignatureEngine:
         query = self._embed(text)
         top_k = self.settings.layer_b_top_k
 
-        # Attack similarity (top-k mean) 
+        # Attack similarity (top-k mean)
         k_attack = min(top_k, self.attack_centroids.shape[0])
         atk_scores, atk_ids = self._search(self.attack_index, query, k_attack)
         atk_scores = atk_scores[0]  # shape (k_attack,)
         atk_ids = atk_ids[0]
         attack_sim = float(np.mean(atk_scores[:k_attack]))
 
-        # Benign similarity (top-k mean) 
+        # Benign similarity (top-k mean)
         if self.benign_index is not None and self.benign_centroids is not None:
             k_benign = min(top_k, self.benign_centroids.shape[0])
             ben_scores, _ = self._search(self.benign_index, query, k_benign)
@@ -231,7 +249,7 @@ class SignatureEngine:
         else:
             benign_sim = 0.0
 
-        # Contrastive score (attack sim - benign sim) 
+        # Contrastive score (attack sim - benign sim)
         contrastive = attack_sim - benign_sim
 
         # Build match objects
@@ -250,21 +268,27 @@ class SignatureEngine:
             samples = meta.get("sample_prompts", [])
             desc = samples[0][:100] if samples else f"cluster_{cid}"
 
-            matches.append(SignatureMatch(
-                rule_id=f"cluster_{cid}",
-                severity=Severity.MALICIOUS,
-                pattern="contrastive_embedding",
-                matched_text=text[:200],
-                start_pos=0,
-                end_pos=len(text),
-                rule_description=desc,
-                tags=[f"cluster_{cid}", f"rank_{rank}",
-                      f"atk_sim={attack_sim:.3f}", f"ben_sim={benign_sim:.3f}",
-                      f"contrastive={contrastive:.3f}"],
-                confidence=score_f,
-            ))
+            matches.append(
+                SignatureMatch(
+                    rule_id=f"cluster_{cid}",
+                    severity=Severity.MALICIOUS,
+                    pattern="contrastive_embedding",
+                    matched_text=text[:200],
+                    start_pos=0,
+                    end_pos=len(text),
+                    rule_description=desc,
+                    tags=[
+                        f"cluster_{cid}",
+                        f"rank_{rank}",
+                        f"atk_sim={attack_sim:.3f}",
+                        f"ben_sim={benign_sim:.3f}",
+                        f"contrastive={contrastive:.3f}",
+                    ],
+                    confidence=score_f,
+                )
+            )
 
-        #  Two-threshold decision on mean top-k attack similarity 
+        #  Two-threshold decision on mean top-k attack similarity
         # block_threshold / flag_threshold are compared against attack_sim.
         # Contrastive guard: if benign similarity exceeds attack similarity at
         # the block boundary, demote to FLAG to avoid false positives.

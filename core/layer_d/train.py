@@ -1,17 +1,15 @@
 import argparse
 import shutil
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.layer_c.train.load_data import load_data
 from core.layer_c.train.utils import write_json
 from core.layer_d.train_eval import train_eval
 from core.settings import Settings
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
@@ -131,6 +129,7 @@ def main():
     print(f"VAL ROC-AUC: {metrics['val']['roc_auc']:.4f}")
     print(f"TEST ROC-AUC: {metrics['test']['roc_auc']:.4f}")
     print(f"Rows used: {len(df)}")
+
 
 if __name__ == "__main__":
     main()

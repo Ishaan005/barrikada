@@ -26,16 +26,13 @@ Or run from repo root:
 
 import gc
 import logging
-import sys
 import time
 from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(ROOT))
 
 from core.layer_b.extraction.dataset import load_dataset
 from core.layer_b.extraction.dual_encoder_trainer import train_dual_encoder
 from core.settings import Settings
+
 
 DATASET_CSV = Path("datasets/barrikade.csv")
 

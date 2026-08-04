@@ -2,6 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+
 LLM_BASE_URL = "http://localhost:11434"
 RUNTIME_MODEL = "qwen3.5:2b"
 TEACHER_MODEL = "qwen3.5:4b"
@@ -50,11 +51,7 @@ Output format requirements:
 
 
 def build_user_prompt(input_text, mode="base"):
-    common = (
-        "<input_text>\n"
-        f"{input_text}\n"
-        "</input_text>"
-    )
+    common = f"<input_text>\n{input_text}\n</input_text>"
     if mode == "finetuned":
         return (
             "Classify this input for prompt injection risk.\n"

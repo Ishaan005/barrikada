@@ -1,4 +1,4 @@
-"""Session-aware orchestrator for Barrikada agentic security.
+"""Session-aware orchestrator for Barrikade agentic security.
 
 Wraps the existing stateless ``PIPipeline`` with session context, intent
 drift detection, risk budget checking, and incident reporting.  The
@@ -6,7 +6,6 @@ original ``PIPipeline.detect()`` method is left completely unchanged —
 this is a new orchestration layer on top.
 """
 
-from core.session import InMemorySessionStore
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -18,6 +17,7 @@ from core.intent_scorer import DriftLevel, DriftResult, IntentDeviationScorer
 from core.orchestrator import PIPipeline
 from core.risk_budget import RiskAssessment, RiskBudgetEngine, RiskCategory
 from core.session import (
+    InMemorySessionStore,
     SessionEvent,
     SessionEventType,
     SessionNotActiveError,
@@ -25,9 +25,10 @@ from core.session import (
     SessionStoreBackend,
 )
 from core.session_settings import SessionSettings
-from models.verdicts import InputProvenance, Intervention
-from models.incident_report import IncidentReport
 from core.telemetry import telemetry
+from models.incident_report import IncidentReport
+from models.verdicts import InputProvenance, Intervention
+
 
 log = logging.getLogger(__name__)
 
@@ -54,9 +55,7 @@ class SessionDetectResult:
             "pipeline_result": self.pipeline_result,
             "session_id": self.session_id,
             "drift": self.drift.to_dict() if self.drift else None,
-            "risk_assessment": (
-                self.risk_assessment.to_dict() if self.risk_assessment else None
-            ),
+            "risk_assessment": (self.risk_assessment.to_dict() if self.risk_assessment else None),
             "intervention": self.intervention.value,
         }
 
@@ -84,7 +83,7 @@ class SessionOrchestrator:
         self._reporter = incident_reporter
         self._settings = settings or SessionSettings()
 
-    #Session Lifecycle
+    # Session Lifecycle
 
     def start_session(
         self,
@@ -105,7 +104,7 @@ class SessionOrchestrator:
             permissions: Initially granted permissions.
             provenance: Trust level of the session initiator.
             delegation_chain: List of agent identifiers in the delegation
-                path (populated by the calling framework; Barrikada does
+                path (populated by the calling framework; Barrikade does
                 not validate chain integrity).
             risk_budget: Override the default risk budget for this session.
             trace_id: Distributed tracing trace identifier.
@@ -286,7 +285,8 @@ class SessionOrchestrator:
                 event_id=uuid4().hex[:12],
                 event_type=SessionEventType.DRIFT_CHECK,
                 timestamp=now,
-                data=drift.to_dict() | {
+                data=drift.to_dict()
+                | {
                     "proposed_action_summary": input_text[:200],
                 },
                 provenance=provenance,
@@ -321,9 +321,7 @@ class SessionOrchestrator:
         # Untrusted data flow
         if provenance == InputProvenance.UNTRUSTED_EXTERNAL and tool_name:
             risk_categories.append(RiskCategory.UNTRUSTED_TO_TRUSTED_DATA_FLOW)
-            risk_descriptions.append(
-                f"Untrusted external input flowing into tool: {tool_name}"
-            )
+            risk_descriptions.append(f"Untrusted external input flowing into tool: {tool_name}")
 
         # 5. Risk budget assessment
         risk_assessment: RiskAssessment | None = None

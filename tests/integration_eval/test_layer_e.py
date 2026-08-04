@@ -1,22 +1,20 @@
-import sys
+import os
 import time
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
-project_root = Path(__file__).resolve().parents[2]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-from core.layer_e.local_judge import Qwen3GuardJudge # noqa: F401
+from core.layer_e.local_judge import Qwen3GuardJudge  # noqa: F401
 from core.settings import Settings
 
+
+project_root = Path(__file__).resolve().parents[2]
 
 TEST_PROMPT_LIMIT = 2000
 
 
 def load_test_data(csv_path):
-    import os
     df = pd.read_csv(csv_path)
     if not os.getenv("BARRIKADE_TEST_FULL_DATASET"):
         df = df.head(5)
@@ -102,13 +100,15 @@ def evaluate_judge(judge, texts, labels):
     print(f"Recall:    {recall:.4f}  (of all malicious, fraction blocked)")
     print(f"F1:        {f1:.4f}")
     print("\nSecurity rates")
-    print(f"Malicious escape rate (allowed malicious / all malicious): {malicious_escape_rate:.4f}  ({fn}/{n_mal})")
-    print(f"Safe block rate       (blocked safe / all safe):           {safe_block_rate:.4f}  ({safe_block}/{n_safe})")
+    print(
+        f"Malicious escape rate (allowed malicious / all malicious): {malicious_escape_rate:.4f}  ({fn}/{n_mal})"
+    )
+    print(
+        f"Safe block rate       (blocked safe / all safe):           {safe_block_rate:.4f}  ({safe_block}/{n_safe})"
+    )
     print(f"Fallback block count: {fallback_blocks}/{total}")
     return {"total": total}
 
-
-import pytest
 
 @pytest.mark.slow
 def test_layer_e():

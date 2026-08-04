@@ -1,13 +1,16 @@
-from pathlib import Path
 import hashlib
 import logging
+from pathlib import Path
+
 import pandas as pd
 from tqdm import tqdm
+
 
 log = logging.getLogger(__name__)
 
 # cache pre-processed Layer-A/B filtered data
 CACHE_DIR = Path(__file__).resolve().parent.parent / "outputs" / ".cache"
+
 
 def would_reach_layer_c(layer_a_result, layer_b_result):
     # Layer B hard-blocks never reach Layer C.
@@ -15,10 +18,13 @@ def would_reach_layer_c(layer_a_result, layer_b_result):
         return False
 
     # SAFE allowlisting allows early exit only when Layer A is not suspicious.
-    if (not getattr(layer_a_result, "suspicious", False)) and getattr(layer_b_result, "allowlisted", False):
+    if (not getattr(layer_a_result, "suspicious", False)) and getattr(
+        layer_b_result, "allowlisted", False
+    ):
         return False
 
     return True
+
 
 def _cache_key(csv_path):
     """Produce a deterministic cache key from the CSV path + file content hash."""
@@ -36,15 +42,16 @@ def _cache_key(csv_path):
     return h.hexdigest()
 
 
-def load_data(csv_path, *, use_cache= True):
+def load_data(csv_path, *, use_cache=True):
     """Load dataset and run Layer A + B filtering.
 
     Results are cached to disk so subsequent runs skip the expensive
     per-row Layer-A/B inference. The cache is invalidated automatically
     when the source CSV changes.
     """
-    from core.layer_a.pipeline import analyze_text
-    from core.layer_b.signature_engine import SignatureEngine
+    # Layer runtimes are intentionally deferred until an uncached training pass is required.
+    from core.layer_a.pipeline import analyze_text  # noqa: PLC0415
+    from core.layer_b.signature_engine import SignatureEngine  # noqa: PLC0415
 
     cache_path = None
     if use_cache:
@@ -59,7 +66,7 @@ def load_data(csv_path, *, use_cache= True):
             y = used_df["label"]
             return X, y, used_df
 
-    #Full pass through Layer A + B
+    # Full pass through Layer A + B
     df = pd.read_csv(csv_path)
     y_all = df["label"].astype(int)
 
@@ -76,7 +83,9 @@ def load_data(csv_path, *, use_cache= True):
         if would_reach_layer_c(layer_a_result, layer_b_result):
             layer_c_results.append((layer_a_result.processed_text, y_all[i]))
 
-            if layer_b_result.verdict == "allow" and not getattr(layer_b_result, "allowlisted", False):
+            if layer_b_result.verdict == "allow" and not getattr(
+                layer_b_result, "allowlisted", False
+            ):
                 non_allowlisted_allow += 1
             if layer_b_result.verdict == "allow" and getattr(layer_b_result, "allowlisted", False):
                 allowlisted_allow += 1
@@ -87,7 +96,10 @@ def load_data(csv_path, *, use_cache= True):
 
     log.info(
         "Layer A+B filtering: %d → %d rows (allowlisted_allow=%d, non_allowlisted_allow=%d)",
-        len(df), len(used_df), allowlisted_allow, non_allowlisted_allow,
+        len(df),
+        len(used_df),
+        allowlisted_allow,
+        non_allowlisted_allow,
     )
     print(
         f"Filtering complete: {len(df)} → {len(used_df)} rows "

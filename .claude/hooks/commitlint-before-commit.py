@@ -13,11 +13,14 @@ Rules enforced (aligned with @commitlint/config-conventional):
   - Description: lowercase, imperative mood preferred, no trailing period
 """
 
-import sys
+from __future__ import annotations
+
 import json
 import re
+import sys
 import textwrap
 from pathlib import Path
+
 
 ALLOWED_TYPES = {
     "feat",
@@ -180,11 +183,18 @@ def run_git_hook(commit_msg_filepath: str) -> int:
 
     errors = check_commit_message(msg)
     if errors:
-        print("\n\033[31m✖ Commit message fails Conventional Commits validation!\033[0m", file=sys.stderr)
+        print(
+            "\n\033[31m✖ Commit message fails Conventional Commits validation!\033[0m",
+            file=sys.stderr,
+        )
         for err in errors:
             print(f"  \033[31m✖\033[0m {err}", file=sys.stderr)
-        print("\nRefer to .github/rules/conventional-commits.md for correct format.", file=sys.stderr)
-        print("Example: \033[32mfeat(sdk): implement new detector interface\033[0m\n", file=sys.stderr)
+        print(
+            "\nRefer to .github/rules/conventional-commits.md for correct format.", file=sys.stderr
+        )
+        print(
+            "Example: \033[32mfeat(sdk): implement new detector interface\033[0m\n", file=sys.stderr
+        )
         return 1
 
     return 0

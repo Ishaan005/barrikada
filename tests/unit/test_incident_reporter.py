@@ -1,10 +1,12 @@
 """Unit tests for the Incident Reporter."""
 
+import json
 from datetime import datetime, timezone
 
 import numpy as np
 import pytest
 
+from core.__version__ import __version__
 from core.incident_reporter import IncidentReporter
 from core.session import (
     InMemorySessionStore,
@@ -12,7 +14,6 @@ from core.session import (
     SessionEventType,
 )
 from core.session_settings import SessionSettings
-from core.__version__ import __version__
 from models.incident_report import IncidentReport
 from models.verdicts import InputProvenance
 
@@ -81,20 +82,23 @@ def test_pipeline_events_recorded(store, reporter):
     session = _make_session(store)
     now = datetime.now(timezone.utc)
 
-    store.append_event(session.session_id, SessionEvent(
-        event_id="pe_001",
-        event_type=SessionEventType.PIPELINE_RESULT,
-        timestamp=now,
-        data={"source": "test"},
-        provenance=InputProvenance.UNTRUSTED_EXTERNAL,
-        pipeline_result={
-            "input_hash": "abc123",
-            "final_verdict": "allow",
-            "decision_layer": "B",
-            "confidence_score": 0.95,
-            "total_processing_time_ms": 12.5,
-        },
-    ))
+    store.append_event(
+        session.session_id,
+        SessionEvent(
+            event_id="pe_001",
+            event_type=SessionEventType.PIPELINE_RESULT,
+            timestamp=now,
+            data={"source": "test"},
+            provenance=InputProvenance.UNTRUSTED_EXTERNAL,
+            pipeline_result={
+                "input_hash": "abc123",
+                "final_verdict": "allow",
+                "decision_layer": "B",
+                "confidence_score": 0.95,
+                "total_processing_time_ms": 12.5,
+            },
+        ),
+    )
 
     store.close_session(session.session_id)
     report = reporter.generate_report(session.session_id)
@@ -113,19 +117,22 @@ def test_near_miss_on_pipeline_block(store, reporter):
     session = _make_session(store)
     now = datetime.now(timezone.utc)
 
-    store.append_event(session.session_id, SessionEvent(
-        event_id="pe_block",
-        event_type=SessionEventType.PIPELINE_RESULT,
-        timestamp=now,
-        data={"source": "test"},
-        pipeline_result={
-            "input_hash": "mal_001",
-            "final_verdict": "block",
-            "decision_layer": "B",
-            "confidence_score": 0.98,
-            "total_processing_time_ms": 8.0,
-        },
-    ))
+    store.append_event(
+        session.session_id,
+        SessionEvent(
+            event_id="pe_block",
+            event_type=SessionEventType.PIPELINE_RESULT,
+            timestamp=now,
+            data={"source": "test"},
+            pipeline_result={
+                "input_hash": "mal_001",
+                "final_verdict": "block",
+                "decision_layer": "B",
+                "confidence_score": 0.98,
+                "total_processing_time_ms": 8.0,
+            },
+        ),
+    )
 
     store.close_session(session.session_id)
     report = reporter.generate_report(session.session_id)
@@ -138,19 +145,22 @@ def test_near_miss_on_pipeline_flag(store, reporter):
     session = _make_session(store)
     now = datetime.now(timezone.utc)
 
-    store.append_event(session.session_id, SessionEvent(
-        event_id="pe_flag",
-        event_type=SessionEventType.PIPELINE_RESULT,
-        timestamp=now,
-        data={"source": "test"},
-        pipeline_result={
-            "input_hash": "sus_001",
-            "final_verdict": "flag",
-            "decision_layer": "C",
-            "confidence_score": 0.70,
-            "total_processing_time_ms": 15.0,
-        },
-    ))
+    store.append_event(
+        session.session_id,
+        SessionEvent(
+            event_id="pe_flag",
+            event_type=SessionEventType.PIPELINE_RESULT,
+            timestamp=now,
+            data={"source": "test"},
+            pipeline_result={
+                "input_hash": "sus_001",
+                "final_verdict": "flag",
+                "decision_layer": "C",
+                "confidence_score": 0.70,
+                "total_processing_time_ms": 15.0,
+            },
+        ),
+    )
 
     store.close_session(session.session_id)
     report = reporter.generate_report(session.session_id)
@@ -161,16 +171,19 @@ def test_near_miss_on_escalate_intervention(store, reporter):
     session = _make_session(store)
     now = datetime.now(timezone.utc)
 
-    store.append_event(session.session_id, SessionEvent(
-        event_id="iv_001",
-        event_type=SessionEventType.INTERVENTION,
-        timestamp=now,
-        data={
-            "intervention": "escalate",
-            "reason": "Budget exhausted",
-            "trigger": "risk_budget",
-        },
-    ))
+    store.append_event(
+        session.session_id,
+        SessionEvent(
+            event_id="iv_001",
+            event_type=SessionEventType.INTERVENTION,
+            timestamp=now,
+            data={
+                "intervention": "escalate",
+                "reason": "Budget exhausted",
+                "trigger": "risk_budget",
+            },
+        ),
+    )
 
     store.close_session(session.session_id)
     report = reporter.generate_report(session.session_id)
@@ -185,17 +198,20 @@ def test_drift_events_recorded(store, reporter):
     session = _make_session(store)
     now = datetime.now(timezone.utc)
 
-    store.append_event(session.session_id, SessionEvent(
-        event_id="drift_001",
-        event_type=SessionEventType.DRIFT_CHECK,
-        timestamp=now,
-        data={
-            "drift_score": 0.42,
-            "cosine_similarity": 0.58,
-            "risk_level": "high",
-            "proposed_action_summary": "connect to external API",
-        },
-    ))
+    store.append_event(
+        session.session_id,
+        SessionEvent(
+            event_id="drift_001",
+            event_type=SessionEventType.DRIFT_CHECK,
+            timestamp=now,
+            data={
+                "drift_score": 0.42,
+                "cosine_similarity": 0.58,
+                "risk_level": "high",
+                "proposed_action_summary": "connect to external API",
+            },
+        ),
+    )
 
     store.close_session(session.session_id)
     report = reporter.generate_report(session.session_id)
@@ -212,17 +228,20 @@ def test_tool_calls_recorded(store, reporter):
     session = _make_session(store)
     now = datetime.now(timezone.utc)
 
-    store.append_event(session.session_id, SessionEvent(
-        event_id="tool_001",
-        event_type=SessionEventType.TOOL_CALL,
-        timestamp=now,
-        data={
-            "tool_name": "read_database",
-            "arguments": {"query": "SELECT *"},
-            "result_summary": "100 rows",
-        },
-        provenance=InputProvenance.TRUSTED_INTERNAL,
-    ))
+    store.append_event(
+        session.session_id,
+        SessionEvent(
+            event_id="tool_001",
+            event_type=SessionEventType.TOOL_CALL,
+            timestamp=now,
+            data={
+                "tool_name": "read_database",
+                "arguments": {"query": "SELECT *"},
+                "result_summary": "100 rows",
+            },
+            provenance=InputProvenance.TRUSTED_INTERNAL,
+        ),
+    )
 
     store.close_session(session.session_id)
     report = reporter.generate_report(session.session_id)
@@ -239,16 +258,19 @@ def test_risk_events_recorded(store, reporter):
     session = _make_session(store)
     now = datetime.now(timezone.utc)
 
-    store.append_event(session.session_id, SessionEvent(
-        event_id="risk_001",
-        event_type=SessionEventType.RISK_BUDGET_DEDUCTION,
-        timestamp=now,
-        data={
-            "categories": ["new_external_domain"],
-            "total_cost": 1,
-            "budget_remaining": 4,
-        },
-    ))
+    store.append_event(
+        session.session_id,
+        SessionEvent(
+            event_id="risk_001",
+            event_type=SessionEventType.RISK_BUDGET_DEDUCTION,
+            timestamp=now,
+            data={
+                "categories": ["new_external_domain"],
+                "total_cost": 1,
+                "budget_remaining": 4,
+            },
+        ),
+    )
 
     store.close_session(session.session_id)
     report = reporter.generate_report(session.session_id)
@@ -264,18 +286,24 @@ def test_permission_events_recorded(store, reporter):
     session = _make_session(store)
     now = datetime.now(timezone.utc)
 
-    store.append_event(session.session_id, SessionEvent(
-        event_id="perm_req_001",
-        event_type=SessionEventType.PERMISSION_REQUEST,
-        timestamp=now,
-        data={"permissions": ["write_database"]},
-    ))
-    store.append_event(session.session_id, SessionEvent(
-        event_id="perm_grant_001",
-        event_type=SessionEventType.PERMISSION_GRANT,
-        timestamp=now,
-        data={"permissions": ["write_database"]},
-    ))
+    store.append_event(
+        session.session_id,
+        SessionEvent(
+            event_id="perm_req_001",
+            event_type=SessionEventType.PERMISSION_REQUEST,
+            timestamp=now,
+            data={"permissions": ["write_database"]},
+        ),
+    )
+    store.append_event(
+        session.session_id,
+        SessionEvent(
+            event_id="perm_grant_001",
+            event_type=SessionEventType.PERMISSION_GRANT,
+            timestamp=now,
+            data={"permissions": ["write_database"]},
+        ),
+    )
 
     store.close_session(session.session_id)
     report = reporter.generate_report(session.session_id)
@@ -296,7 +324,6 @@ def test_export_json(store, reporter):
     assert isinstance(json_str, str)
     assert session.session_id in json_str
 
-    import json
     parsed = json.loads(json_str)
     assert parsed["workload_id"] == session.session_id
 

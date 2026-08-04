@@ -14,7 +14,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -24,12 +24,12 @@ CORE_DIR = REPO_ROOT / "core"
 MODELS_DIR = CORE_DIR / "models"
 
 
-def validate_layer_b() -> Tuple[bool, List[str]]:
+def validate_layer_b() -> tuple[bool, list[str]]:
     """Validate Layer B (Signature Engine) models."""
     errors = []
     warnings = []
     target_dir = MODELS_DIR / "layer_b" / "embeddings"
-    
+
     if not target_dir.exists():
         errors.append(f"Directory does not exist: {target_dir}")
         return False, errors
@@ -45,7 +45,9 @@ def validate_layer_b() -> Tuple[bool, List[str]]:
         target_dir / "signature_encoder" / "modules.json",
         target_dir / "signature_encoder" / "tokenizer.json",
     ]
-    missing_required = [str(path.relative_to(MODELS_DIR)) for path in required_files if not path.exists()]
+    missing_required = [
+        str(path.relative_to(MODELS_DIR)) for path in required_files if not path.exists()
+    ]
     if missing_required:
         errors.extend(f"Missing required Layer B file: {path}" for path in missing_required)
 
@@ -71,9 +73,13 @@ def validate_layer_b() -> Tuple[bool, List[str]]:
     has_attack_index = (target_dir / "faiss_index.bin").exists()
     has_benign_index = (target_dir / "benign_faiss_index.bin").exists()
     if not has_attack_index:
-        warnings.append("Missing Layer B FAISS attack index (faiss_index.bin); sklearn fallback is still possible")
+        warnings.append(
+            "Missing Layer B FAISS attack index (faiss_index.bin); sklearn fallback is still possible"
+        )
     if not has_benign_index:
-        warnings.append("Missing Layer B FAISS benign index (benign_faiss_index.bin); sklearn fallback is still possible")
+        warnings.append(
+            "Missing Layer B FAISS benign index (benign_faiss_index.bin); sklearn fallback is still possible"
+        )
 
     logger.info("Layer B:")
     logger.info(f"  ✓ Embeddings directory: {target_dir.exists()}")
@@ -85,7 +91,9 @@ def validate_layer_b() -> Tuple[bool, List[str]]:
     logger.info(f"  ✓ FAISS benign index: {has_benign_index}")
 
     try:
-        from sentence_transformers import SentenceTransformer
+        # Model libraries are optional for structure-only validation.
+        from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+
         if has_prompt_weights:
             SentenceTransformer(str(target_dir / "prompt_encoder"), device="cpu")
             logger.info("  ✓ Prompt encoder loads successfully")
@@ -98,7 +106,8 @@ def validate_layer_b() -> Tuple[bool, List[str]]:
         errors.append(f"Failed to load Layer B sentence-transformer bundle: {e}")
 
     try:
-        import faiss
+        import faiss  # noqa: PLC0415
+
         if has_attack_index:
             faiss.read_index(str(target_dir / "faiss_index.bin"))
             logger.info("  ✓ FAISS attack index loads successfully")
@@ -116,97 +125,106 @@ def validate_layer_b() -> Tuple[bool, List[str]]:
     return len(errors) == 0, errors
 
 
-def validate_layer_c() -> Tuple[bool, List[str]]:
+def validate_layer_c() -> tuple[bool, list[str]]:
     """Validate Layer C (ML Classifier) models."""
     errors = []
     target_dir = MODELS_DIR / "layer_c"
-    
+
     if not target_dir.exists():
         errors.append(f"Directory does not exist: {target_dir}")
         return False, errors
-    
+
     # Check for joblib files
     joblib_files = list(target_dir.glob("**/*.joblib"))
-    
+
     if not joblib_files:
         errors.append("No .joblib files found")
         return False, errors
-    
+
     logger.info("Layer C:")
     logger.info(f"  ✓ Joblib files: {len(joblib_files)}")
-    
+
     # Try to load a sample joblib file
     try:
-        import joblib
+        import joblib  # noqa: PLC0415
+
         test_file = joblib_files[0]
-        model = joblib.load(test_file)
+        joblib.load(test_file)
         logger.info(f"  ✓ Joblib model loads successfully ({test_file.name})")
     except ImportError:
         logger.debug("  ⊘ joblib not installed, skipping load test")
     except Exception as e:
         errors.append(f"Failed to load joblib model: {e}")
-    
+
     return len(errors) == 0, errors
 
 
-def validate_layer_d() -> Tuple[bool, List[str]]:
+def validate_layer_d() -> tuple[bool, list[str]]:
     """Validate Layer D (ModernBERT) models."""
     errors = []
     target_dir = MODELS_DIR / "layer_d"
-    
+
     if not target_dir.exists():
         errors.append(f"Directory does not exist: {target_dir}")
         return False, errors
-    
+
     # Check for Hugging Face model structure
     # Models can be in model/ subdirectory (from bundling) or at root
     model_dir = target_dir / "model"
-    config_file = target_dir / "config.json" if (target_dir / "config.json").exists() else target_dir / "model" / "config.json"
-    tokenizer_file = target_dir / "tokenizer.json" if (target_dir / "tokenizer.json").exists() else target_dir / "model" / "tokenizer.json"
-    
+    config_file = (
+        target_dir / "config.json"
+        if (target_dir / "config.json").exists()
+        else target_dir / "model" / "config.json"
+    )
+    tokenizer_file = (
+        target_dir / "tokenizer.json"
+        if (target_dir / "tokenizer.json").exists()
+        else target_dir / "model" / "tokenizer.json"
+    )
+
     has_model_dir = model_dir.exists()
     has_config = config_file.exists()
     has_tokenizer = tokenizer_file.exists()
-    
+
     logger.info("Layer D:")
     logger.info(f"  ✓ Model directory: {has_model_dir}")
     logger.info(f"  ✓ Config file: {has_config}")
     logger.info(f"  ✓ Tokenizer file: {has_tokenizer}")
-    
+
     if not has_config:
         errors.append("Missing config.json")
     if not has_tokenizer and not has_config:
         errors.append("Missing both config.json and tokenizer.json")
-    
+
     # Try to load model if transformers is available
     try:
-        from transformers import AutoModel, AutoTokenizer
-        
+        from transformers import AutoModel  # noqa: PLC0415
+
         if has_config and has_model_dir:
             try:
                 AutoModel.from_pretrained(str(model_dir))  # nosec B615
-                logger.info(f"  ✓ Transformers model loads successfully")
+                logger.info("  ✓ Transformers model loads successfully")
             except Exception as e:
                 logger.warning(f"  ⚠ Warning loading model: {e}")
     except ImportError:
         logger.debug("  ⊘ transformers not installed, skipping load test")
-    
+
     return len(errors) == 0, errors
 
 
-def validate_layer_e() -> Tuple[bool, List[str]]:
+def validate_layer_e() -> tuple[bool, list[str]]:
     """Validate Layer E (LLM Judge) models."""
     errors = []
     target_dir = MODELS_DIR / "layer_e"
-    
+
     if not target_dir.exists():
         errors.append(f"Directory does not exist: {target_dir}")
         return False, errors
-    
+
     qwen3guard_dir = target_dir / "qwen3guard-barrikade"
     model_dir = qwen3guard_dir
     has_model_dir = model_dir.exists()
-    
+
     # Check for config files
     config_files = list(target_dir.glob("**/*.json"))
 
@@ -216,24 +234,24 @@ def validate_layer_e() -> Tuple[bool, List[str]]:
 
     if not has_model_dir and not config_files:
         errors.append("Qwen3Guard bundle not found")
-    
+
     # Try to load Layer E model if available
     try:
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        
+        from transformers import AutoModelForCausalLM  # noqa: PLC0415
+
         if model_dir.exists():
             try:
                 AutoModelForCausalLM.from_pretrained(str(model_dir))  # nosec B615
-                logger.info(f"  ✓ Layer E model loads successfully")
+                logger.info("  ✓ Layer E model loads successfully")
             except Exception as e:
                 logger.warning(f"  ⚠ Warning loading Layer E model: {e}")
     except ImportError:
         logger.debug("  ⊘ transformers not installed, skipping load test")
-    
+
     return len(errors) == 0, errors
 
 
-def check_archive_structure() -> Tuple[bool, List[str]]:
+def check_archive_structure() -> tuple[bool, list[str]]:
     """Check that archive directories exist."""
     logger.info("\nArchive structure:")
     for layer in ["layer_b", "layer_c", "layer_d", "layer_e"]:
@@ -249,15 +267,15 @@ def check_archive_structure() -> Tuple[bool, List[str]]:
 def main():
     parser = argparse.ArgumentParser(description="Validate bundled models")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    
+
     args = parser.parse_args()
-    
+
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
-    
+
     logger.info("Validating bundled models...")
     logger.info(f"Models directory: {MODELS_DIR.relative_to(REPO_ROOT)}\n")
-    
+
     results = {
         "Layer B (Signatures)": validate_layer_b(),
         "Layer C (Classifier)": validate_layer_c(),
@@ -265,26 +283,26 @@ def main():
         "Layer E (LLM Judge)": validate_layer_e(),
         "Archive structure": check_archive_structure(),
     }
-    
-    logger.info(f"\n{'='*60}")
+
+    logger.info(f"\n{'=' * 60}")
     logger.info("VALIDATION SUMMARY")
-    logger.info(f"{'='*60}")
-    
+    logger.info(f"{'=' * 60}")
+
     all_valid = True
     for name, (success, errors) in results.items():
         status = "✓ PASS" if success else "✗ FAIL"
         logger.info(f"{status}: {name}")
-        
+
         if errors:
             for error in errors:
                 logger.error(f"  → {error}")
             all_valid = False
-    
+
     if all_valid:
-        logger.info(f"\n✓ All validations passed")
+        logger.info("\n✓ All validations passed")
         return 0
     else:
-        logger.error(f"\n✗ Some validations failed")
+        logger.error("\n✗ Some validations failed")
         return 1
 
 

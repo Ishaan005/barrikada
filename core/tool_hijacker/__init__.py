@@ -17,17 +17,17 @@ Main components:
 
 Usage:
     from core.tool_hijacker import ToolHijacker
-    
+
     # Create attack generator
     hijacker = ToolHijacker()
-    
+
     # Generate attack
     result = hijacker.generate_attack(
         target_task="Analyze customer sentiment from reviews",
         malicious_tool_name="DataExfiltrator",
         optimization_method="gradient_free"
     )
-    
+
     # Access malicious tool
     malicious_tool = result.malicious_tool
     print(f"Tool: {malicious_tool.name}")
@@ -35,53 +35,46 @@ Usage:
     print(f"Success rate: {result.overall_success_rate:.2%}")
 """
 
-from .tool_document import ToolDocument, MaliciousToolDocument
-from .shadow_framework import (
-    ShadowFramework,
-    ShadowRetriever,
-    ShadowLLM,
-    ShadowTask
-)
-from .task_generator import ShadowTaskGenerator
-from .tool_library import ShadowToolLibrary
+from core.__version__ import __version__
+
+from .attack_generator import AttackResult, ToolHijacker
 from .retrieval_optimizer import (
-    RetrievalOptimizer,
+    GradientBasedRetrievalOptimizer,
     GradientFreeRetrievalOptimizer,
-    GradientBasedRetrievalOptimizer
+    RetrievalOptimizer,
 )
 from .selection_optimizer import (
-    SelectionOptimizer,
+    GradientBasedSelectionOptimizer,
     GradientFreeSelectionOptimizer,
-    GradientBasedSelectionOptimizer
+    SelectionOptimizer,
 )
-from .attack_generator import ToolHijacker, AttackResult
+from .shadow_framework import ShadowFramework, ShadowLLM, ShadowRetriever, ShadowTask
+from .task_generator import ShadowTaskGenerator
+from .tool_document import MaliciousToolDocument, ToolDocument
+from .tool_library import ShadowToolLibrary
+
 
 __all__ = [
     # Main classes
-    'ToolHijacker',
-    'AttackResult',
-    
+    "ToolHijacker",
+    "AttackResult",
     # Tool documents
-    'ToolDocument',
-    'MaliciousToolDocument',
-    
+    "ToolDocument",
+    "MaliciousToolDocument",
     # Shadow framework
-    'ShadowFramework',
-    'ShadowRetriever',
-    'ShadowLLM',
-    'ShadowTask',
-    
+    "ShadowFramework",
+    "ShadowRetriever",
+    "ShadowLLM",
+    "ShadowTask",
     # Utilities
-    'ShadowTaskGenerator',
-    'ShadowToolLibrary',
-    
+    "ShadowTaskGenerator",
+    "ShadowToolLibrary",
     # Optimizers
-    'RetrievalOptimizer',
-    'GradientFreeRetrievalOptimizer',
-    'GradientBasedRetrievalOptimizer',
-    'SelectionOptimizer',
-    'GradientFreeSelectionOptimizer',
-    'GradientBasedSelectionOptimizer',
+    "RetrievalOptimizer",
+    "GradientFreeRetrievalOptimizer",
+    "GradientBasedRetrievalOptimizer",
+    "SelectionOptimizer",
+    "GradientFreeSelectionOptimizer",
+    "GradientBasedSelectionOptimizer",
+    "__version__",
 ]
-
-from core.__version__ import __version__

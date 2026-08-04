@@ -1,1 +1,1 @@
-"""Barrikada API package."""
+"""Barrikade API package."""

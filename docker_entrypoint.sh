@@ -10,7 +10,7 @@
 set -euo pipefail
 
 MODELS_DIR="/app/core/models"
-LOG_PREFIX="[BARRIKADA INIT]"
+LOG_PREFIX="[BARRIKADE INIT]"
 DEFAULT_GCS_BUCKET="barrikade-bundles"
 
 log_info() {
@@ -75,7 +75,7 @@ validate_models() {
 
 # Main logic
 main() {
-    log_info "Starting Barrikada container initialization..."
+    log_info "Starting Barrikade container initialization..."
     log_info "Models directory: $MODELS_DIR"
 
     if has_local_models; then

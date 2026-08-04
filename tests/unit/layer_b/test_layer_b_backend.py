@@ -10,16 +10,16 @@ Skipped if the real Layer B artifacts aren't present locally (run
 scripts/bundling/gcs_download.py to populate core/models/layer_b/, then
 core/layer_b/export_layer_b_onnx.py to produce the ONNX sibling).
 """
-import sys
+
 from pathlib import Path
 
 import pytest
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
 from core.layer_b.signature_engine import SignatureEngine
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 
 EMBEDDINGS_DIR = PROJECT_ROOT / "core" / "models" / "layer_b" / "embeddings"
 PROMPT_ENCODER_DIR = EMBEDDINGS_DIR / "prompt_encoder"
@@ -70,9 +70,7 @@ def test_signature_engine_prefers_onnx_when_available():
     SignatureEngine must load the ONNX backend. Skipped if the real
     artifacts aren't on disk locally."""
     if not PROMPT_ENCODER_ONNX_DIR.exists():
-        pytest.skip(
-            f"missing {PROMPT_ENCODER_ONNX_DIR} -- run core/layer_b/export_layer_b_onnx.py"
-        )
+        pytest.skip(f"missing {PROMPT_ENCODER_ONNX_DIR} -- run core/layer_b/export_layer_b_onnx.py")
     if not (EMBEDDINGS_DIR / "centroids.npy").exists():
         pytest.skip(
             f"missing layer_b artifacts in {EMBEDDINGS_DIR} -- run scripts/bundling/gcs_download.py"

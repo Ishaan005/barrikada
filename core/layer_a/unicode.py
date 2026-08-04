@@ -1,5 +1,6 @@
 import unicodedata
 
+
 def normalize_uniccode(text, form="NFKC"):
     """Normalize unicode text to NFKC form."""
     if form == "NFC":

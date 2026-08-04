@@ -11,11 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 from core.__version__ import __version__
-from core.session import (
-    SessionEvent,
-    SessionEventType,
-    SessionStoreBackend
-)
+from core.session import SessionEvent, SessionEventType, SessionStoreBackend
 from models.incident_report import (
     DriftEventRecord,
     IncidentReport,
@@ -25,6 +21,7 @@ from models.incident_report import (
     RiskEventRecord,
     ToolInvocation,
 )
+
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +35,7 @@ class IncidentReporter:
     def __init__(self, session_store: SessionStoreBackend) -> None:
         self._store = session_store
 
-    #public API
+    # public API
 
     def generate_report(
         self,
@@ -85,7 +82,7 @@ class IncidentReporter:
                 permissions_granted_during=permissions_granted_during,
             )
 
-        #Near-miss detection
+        # Near-miss detection
         # If any pipeline event returned block or flag but the session
         # was ultimately allowed to complete, that's a near miss.
         for pe in pipeline_events:
@@ -100,9 +97,7 @@ class IncidentReporter:
         for iv in interventions:
             if iv.intervention_type in ("escalate", "resample", "downgrade"):
                 near_miss_detected = True
-                near_miss_reasons.append(
-                    f"Intervention {iv.intervention_type}: {iv.reason}"
-                )
+                near_miss_reasons.append(f"Intervention {iv.intervention_type}: {iv.reason}")
 
         # Max drift
         if drift_events:
@@ -132,9 +127,7 @@ class IncidentReporter:
             interventions=interventions,
             final_outcome=session.status.value,
             is_near_miss=near_miss_detected,
-            near_miss_details=(
-                "; ".join(near_miss_reasons) if near_miss_reasons else None
-            ),
+            near_miss_details=("; ".join(near_miss_reasons) if near_miss_reasons else None),
             max_intent_drift_score=max_drift,
             drift_events=drift_events,
             risk_budget_initial=session.risk_budget_initial,
@@ -153,7 +146,7 @@ class IncidentReporter:
         """Serialize report to dict (for API responses)."""
         return report.model_dump(mode="json")
 
-    #event processing
+    # event processing
 
     def _process_event(
         self,
@@ -173,62 +166,74 @@ class IncidentReporter:
 
         if event.event_type == SessionEventType.PIPELINE_RESULT:
             pr = event.pipeline_result or {}
-            pipeline_events.append(PipelineEventRecord(
-                event_id=event.event_id,
-                timestamp=event.timestamp,
-                input_hash=pr.get("input_hash", ""),
-                final_verdict=pr.get("final_verdict", "unknown"),
-                decision_layer=pr.get("decision_layer", ""),
-                confidence_score=pr.get("confidence_score", 0.0),
-                processing_time_ms=pr.get("total_processing_time_ms", 0.0),
-            ))
+            pipeline_events.append(
+                PipelineEventRecord(
+                    event_id=event.event_id,
+                    timestamp=event.timestamp,
+                    input_hash=pr.get("input_hash", ""),
+                    final_verdict=pr.get("final_verdict", "unknown"),
+                    decision_layer=pr.get("decision_layer", ""),
+                    confidence_score=pr.get("confidence_score", 0.0),
+                    processing_time_ms=pr.get("total_processing_time_ms", 0.0),
+                )
+            )
             # Also record the input provenance
-            inputs.append(InputRecord(
-                source=data.get("source", "pipeline"),
-                trust_level=event.provenance.value,
-                content_hash=pr.get("input_hash", ""),
-                timestamp=event.timestamp,
-            ))
+            inputs.append(
+                InputRecord(
+                    source=data.get("source", "pipeline"),
+                    trust_level=event.provenance.value,
+                    content_hash=pr.get("input_hash", ""),
+                    timestamp=event.timestamp,
+                )
+            )
 
         elif event.event_type == SessionEventType.INTERVENTION:
-            interventions.append(InterventionRecord(
-                intervention_type=data.get("intervention", "unknown"),
-                timestamp=event.timestamp,
-                reason=data.get("reason", ""),
-                trigger=data.get("trigger", "unknown"),
-                details=data.get("details", {}),
-            ))
+            interventions.append(
+                InterventionRecord(
+                    intervention_type=data.get("intervention", "unknown"),
+                    timestamp=event.timestamp,
+                    reason=data.get("reason", ""),
+                    trigger=data.get("trigger", "unknown"),
+                    details=data.get("details", {}),
+                )
+            )
 
         elif event.event_type == SessionEventType.DRIFT_CHECK:
-            drift_events.append(DriftEventRecord(
-                timestamp=event.timestamp,
-                drift_score=data.get("drift_score", 0.0),
-                cosine_similarity=data.get("cosine_similarity", 0.0),
-                risk_level=data.get("risk_level", "low"),
-                proposed_action_summary=data.get("proposed_action_summary", ""),
-            ))
+            drift_events.append(
+                DriftEventRecord(
+                    timestamp=event.timestamp,
+                    drift_score=data.get("drift_score", 0.0),
+                    cosine_similarity=data.get("cosine_similarity", 0.0),
+                    risk_level=data.get("risk_level", "low"),
+                    proposed_action_summary=data.get("proposed_action_summary", ""),
+                )
+            )
 
         elif event.event_type == SessionEventType.RISK_BUDGET_DEDUCTION:
             categories = data.get("categories", [])
             cost = data.get("total_cost", 0)
             remaining = data.get("budget_remaining", 0)
             for cat in categories:
-                risk_events.append(RiskEventRecord(
-                    timestamp=event.timestamp,
-                    category=cat,
-                    cost=cost // max(len(categories), 1),
-                    description=data.get("description", f"{cat} risk event"),
-                    budget_remaining_after=remaining,
-                ))
+                risk_events.append(
+                    RiskEventRecord(
+                        timestamp=event.timestamp,
+                        category=cat,
+                        cost=cost // max(len(categories), 1),
+                        description=data.get("description", f"{cat} risk event"),
+                        budget_remaining_after=remaining,
+                    )
+                )
 
         elif event.event_type == SessionEventType.TOOL_CALL:
-            tools_invoked.append(ToolInvocation(
-                tool_name=data.get("tool_name", "unknown"),
-                timestamp=event.timestamp,
-                arguments=data.get("arguments", {}),
-                result_summary=data.get("result_summary"),
-                provenance=event.provenance.value,
-            ))
+            tools_invoked.append(
+                ToolInvocation(
+                    tool_name=data.get("tool_name", "unknown"),
+                    timestamp=event.timestamp,
+                    arguments=data.get("arguments", {}),
+                    result_summary=data.get("result_summary"),
+                    provenance=event.provenance.value,
+                )
+            )
 
         elif event.event_type == SessionEventType.PERMISSION_REQUEST:
             permissions_requested.extend(data.get("permissions", []))
