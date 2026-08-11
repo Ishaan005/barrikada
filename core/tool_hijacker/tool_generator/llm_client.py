@@ -15,7 +15,7 @@ class LLMClient:
         settings = Settings()
         self.model = model or settings.layer_e_model_dir
         self.base_url = base_url
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model, trust_remote_code=True)  # nosec B615
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model, trust_remote_code=False)  # nosec B615
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = (
                 self.tokenizer.eos_token or self.tokenizer.unk_token or self.tokenizer.pad_token
@@ -23,7 +23,7 @@ class LLMClient:
         dtype = torch.float16 if torch.cuda.is_available() else torch.float32
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model_obj = AutoModelForCausalLM.from_pretrained(
-            self.model, dtype=dtype, trust_remote_code=True
+            self.model, dtype=dtype, trust_remote_code=False
         )  # nosec B615
         cast(Any, self.model_obj).to(self.device)
         cast(Any, self.model_obj).eval()

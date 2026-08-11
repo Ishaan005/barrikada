@@ -1,0 +1,171 @@
+{{- if .Values.barrikade.enabled }}
+{{- if and (not .Values.barrikade.database.internal.enabled) (not .Values.barrikade.database.existingSecret) -}}
+{{- fail "barrikade.database.existingSecret is required when the internal database is disabled" -}}
+{{- end }}
+{{- if and (not .Values.barrikade.database.internal.enabled) (empty .Values.barrikade.database.externalEgressCIDRs) -}}
+{{- fail "barrikade.database.externalEgressCIDRs is required when the internal database is disabled" -}}
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "barrikade-jentic.name" . }}-core
+  labels:
+    {{- include "barrikade-jentic.labels" . | nindent 4 }}
+    app.kubernetes.io/component: barrikade-core
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: barrikade-core
+  ports:
+    - name: http
+      port: {{ .Values.barrikade.service.port }}
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "barrikade-jentic.name" . }}-core
+  labels:
+    {{- include "barrikade-jentic.labels" . | nindent 4 }}
+    app.kubernetes.io/component: barrikade-core
+spec:
+  replicas: {{ .Values.barrikade.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: barrikade-core
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: barrikade-core
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/instance: {{ .Release.Name }}
+                    app.kubernetes.io/component: barrikade-core
+      initContainers:
+        - name: migrate
+          image: {{ include "barrikade-jentic.coreImage" . | quote }}
+          imagePullPolicy: {{ .Values.barrikade.image.pullPolicy }}
+          command: ["python", "-m", "barrikade.service.migrate"]
+          env:
+            - name: BARRIKADE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "barrikade-jentic.databaseSecret" . }}
+                  key: url
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: core
+          image: {{ include "barrikade-jentic.coreImage" . | quote }}
+          imagePullPolicy: {{ .Values.barrikade.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: BARRIKADE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "barrikade-jentic.databaseSecret" . }}
+                  key: url
+            - name: BARRIKADE_SERVICE_TOKEN_FILE
+              value: /var/run/secrets/barrikade/tokens.json
+            - name: BARRIKADE_MODEL_BUNDLE_VERSION
+              value: {{ .Values.barrikade.modelBundleVersion | quote }}
+            - name: BARRIKADE_CORE_MODELS_DIR
+              value: /models
+            - name: BARRIKADE_ACTIVE_PROFILE
+              value: jentic_gateway_fast
+            - name: BARRIKADE_AUTO_MIGRATE
+              value: "false"
+            - name: BARRIKADE_VERIFY_ARTIFACTS
+              value: "true"
+            - name: BARRIKADE_INFERENCE_WORKERS
+              value: "1"
+            - name: BARRIKADE_INFERENCE_QUEUE_SIZE
+              value: "32"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.barrikade.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: service-token
+              mountPath: /var/run/secrets/barrikade
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.barrikade.modelBundle.existingClaim }}
+            - name: model-bundle
+              mountPath: /models
+              readOnly: true
+            {{- end }}
+            {{- if .Values.barrikade.modelBundle.publicKeySecret }}
+            - name: model-public-key
+              mountPath: /etc/barrikade
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: service-token
+          secret:
+            secretName: {{ include "barrikade-jentic.tokenSecret" . }}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.barrikade.modelBundle.existingClaim }}
+        - name: model-bundle
+          persistentVolumeClaim:
+            claimName: {{ .Values.barrikade.modelBundle.existingClaim }}
+        {{- end }}
+        {{- if .Values.barrikade.modelBundle.publicKeySecret }}
+        - name: model-public-key
+          secret:
+            secretName: {{ .Values.barrikade.modelBundle.publicKeySecret }}
+            items:
+              - key: {{ .Values.barrikade.modelBundle.publicKeySecretKey }}
+                path: bundle-public.pem
+        {{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "barrikade-jentic.name" . }}-core
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: barrikade-core
+{{- end }}

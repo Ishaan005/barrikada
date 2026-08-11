@@ -201,7 +201,7 @@ Optionally set the public GCS bucket name override (no credentials needed):
 services:
     barrikade-api:
         environment:
-            BARRIKADA_GCS_BUCKET: barrikade-models
+            BARRIKADE_GCS_BUCKET: barrikade-models
 ```
 
 ### Startup Process
@@ -235,7 +235,7 @@ docker compose run -v $(pwd)/core/models:/app/core/models:ro barrikade-api
 Or override the public GCS bucket explicitly:
 
 ```bash
-docker compose run -e BARRIKADA_GCS_BUCKET=barrikade-models barrikade-api
+docker compose run -e BARRIKADE_GCS_BUCKET=barrikade-models barrikade-api
 ```
 
 ## Command Reference
@@ -384,8 +384,8 @@ python scripts/bundling/cleanup_archives.py \
 **Cause**: Container cannot access public GCS bucket or models are not in `core/models/`
 
 **Fix**:
-1. Verify bucket is publicly readable: `gsutil iam get gs://$BARRIKADA_GCS_BUCKET | grep allUsers`
-2. Check bucket contents: `gsutil ls gs://$BARRIKADA_GCS_BUCKET/models/`
+1. Verify bucket is publicly readable: `gsutil iam get gs://$BARRIKADE_GCS_BUCKET | grep allUsers`
+2. Check bucket contents: `gsutil ls gs://$BARRIKADE_GCS_BUCKET/models/`
 3. Check container logs: `docker-compose logs barrikade-api`
 4. Test download manually: `python scripts/bundling/gcs_download.py --bucket barrikade-models`
 5. Mount models locally: `docker-compose run -v $(pwd)/core/models:/app/core/models`
@@ -437,10 +437,10 @@ python scripts/bundling/gcs_download.py --bucket barrikade-models
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BARRIKADA_GCS_BUCKET` | - | GCS bucket name for model storage |
-| `BARRIKADA_GCS_PROJECT` | - | GCP project ID (auto-detected if not set) |
+| `BARRIKADE_GCS_BUCKET` | - | GCS bucket name for model storage |
+| `BARRIKADE_GCS_PROJECT` | - | GCP project ID (auto-detected if not set) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | - | Path to GCP service account JSON file |
-| `BARRIKADA_ARTIFACTS_DIR` | `./artifacts` | Local artifact storage directory |
+| `BARRIKADE_ARTIFACTS_DIR` | `./artifacts` | Local artifact storage directory |
 
 ## Cost Optimization
 

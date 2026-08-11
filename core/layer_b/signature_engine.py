@@ -1,21 +1,14 @@
 import hashlib
 import json
 import logging
-import os
 import time
 from pathlib import Path
 
-import core.onnx_patch  # noqa: F401
-
-
-# Keep the compatibility patch above ML libraries that import Optimum.
-# isort: split
 import numpy as np
-import torch
-from sentence_transformers import SentenceTransformer
 from sklearn.neighbors import NearestNeighbors
 
-from core.settings import Settings
+from core.onnx_encoder import OnnxSentenceEncoder
+from core.settings import Settings, env_value
 from models.LayerBResult import LayerBResult
 from models.SignatureMatch import Severity, SignatureMatch
 
@@ -101,21 +94,21 @@ class SignatureEngine:
         onnx_dir = Path(self.settings.layer_b_signatures_dir) / "prompt_encoder_onnx"
         if onnx_dir.exists() and self._is_onnx_encoder_dir_ready(onnx_dir):
             log.info("Loading ONNX prompt encoder: %s", onnx_dir)
-            self.model = SentenceTransformer(
-                str(onnx_dir),
-                backend="onnx",
-                model_kwargs={"providers": ["CPUExecutionProvider"]},  # Inference is CPU only
-            )
+            self.model = OnnxSentenceEncoder(onnx_dir)
             return
 
         # PT backend fallback (fine-tuned local encoder or HF Hub base model)
         model_name = self._resolve_prompt_encoder_model()
         device = self._select_device()
         log.info("Layer B encoder device: %s", device)
+        from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+
+        import core.onnx_patch  # noqa: F401, PLC0415
+
         self.model = SentenceTransformer(model_name, device=device)
 
     def _select_device(self) -> str:
-        forced = os.getenv("BARRIKADA_EMBEDDING_DEVICE", "").strip().lower()
+        forced = (env_value("BARRIKADE_EMBEDDING_DEVICE", "") or "").strip().lower()
         if forced in {"cpu", "cuda", "mps"}:
             return forced
 
@@ -123,10 +116,14 @@ class SignatureEngine:
         # if platform.system() == "Darwin":
         #     return "cpu"
 
+        try:
+            import torch  # noqa: PLC0415
+        except ImportError:
+            return "cpu"
         return "cuda" if torch.cuda.is_available() else "cpu"
 
     def _select_index_backend(self) -> str:
-        forced = os.getenv("BARRIKADA_LAYER_B_INDEX_BACKEND", "").strip().lower()
+        forced = (env_value("BARRIKADE_LAYER_B_INDEX_BACKEND", "") or "").strip().lower()
         if forced in {"faiss", "sklearn"}:
             return forced
 
@@ -211,7 +208,7 @@ class SignatureEngine:
         return scores.astype(np.float32), ids.astype(np.int64)
 
     @property
-    def embedding_model(self) -> SentenceTransformer:
+    def embedding_model(self):
         """Expose the loaded encoder for reuse by other components."""
         return self.model
 

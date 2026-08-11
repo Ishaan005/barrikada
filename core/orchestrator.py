@@ -2,6 +2,7 @@ import hashlib
 import logging
 import time
 
+from core import configure_safe_runtime
 from core.artifacts import ensure_runtime_artifacts
 from core.settings import Settings
 from core.telemetry import telemetry
@@ -14,18 +15,22 @@ log = logging.getLogger(__name__)
 
 
 class PIPipeline:
-    def __init__(self):
+    _FAST_PROFILES = {"jentic_gateway_fast", "jentic_spec"}
+
+    def __init__(self, profile: str | None = None, prepare_artifacts: bool = True):
+        configure_safe_runtime()
         log.info("Initializing Barrikade pipeline")
-        ensure_runtime_artifacts()
+        if prepare_artifacts:
+            ensure_runtime_artifacts()
 
         # Layer imports must follow artifact preparation and stay off lightweight SDK imports.
         from core.layer_a.pipeline import analyze_text  # noqa: PLC0415
         from core.layer_b.signature_engine import SignatureEngine  # noqa: PLC0415
         from core.layer_c.classifier import Classifier  # noqa: PLC0415
         from core.layer_d.classifier import LayerDClassifier  # noqa: PLC0415
-        from core.layer_e.llm_judge import LLMJudge  # noqa: PLC0415
 
         settings = Settings()
+        self.profile = profile
 
         self.layer_a_analyze = analyze_text
         self.layer_b_engine = SignatureEngine()
@@ -41,15 +46,19 @@ class PIPipeline:
             high=settings.layer_d_high_threshold,
             max_length=settings.layer_d_max_length,
         )
-        self.layer_e_judge = LLMJudge(
-            model_dir=settings.layer_e_model_dir,
-            model_name=settings.layer_e_model_dir,
-            temperature=settings.layer_e_temperature,
-            timeout_s=settings.layer_e_timeout_s,
-            max_retries=settings.layer_e_max_retries,
-            max_new_tokens=settings.layer_e_max_new_tokens,
-            no_think_default=settings.layer_e_no_think_default,
-        )
+        self.layer_e_judge = None
+        if profile not in self._FAST_PROFILES:
+            from core.layer_e.llm_judge import LLMJudge  # noqa: PLC0415
+
+            self.layer_e_judge = LLMJudge(
+                model_dir=settings.layer_e_model_dir,
+                model_name=settings.layer_e_model_dir,
+                temperature=settings.layer_e_temperature,
+                timeout_s=settings.layer_e_timeout_s,
+                max_retries=settings.layer_e_max_retries,
+                max_new_tokens=settings.layer_e_max_new_tokens,
+                no_think_default=settings.layer_e_no_think_default,
+            )
         log.info("Barrikade pipeline ready")
 
     def _create_result(
@@ -264,7 +273,24 @@ class PIPipeline:
                 )
                 return res
 
-            # Layer E
+            if self.layer_e_judge is None:
+                res = self._create_result(
+                    input_hash,
+                    start_time,
+                    layer_a_result,
+                    layer_b_result=layer_b_result,
+                    layer_c_result=layer_c_result,
+                    layer_d_result=layer_d_result,
+                    final_verdict=FinalVerdict.FLAG,
+                    decision_layer=DecisionLayer.LAYER_D,
+                    confidence_score=layer_d_result.confidence_score,
+                )
+                self._emit_pipeline_telemetry(
+                    res, workload_id, trace_id, span_id, layer_errors=layer_errors
+                )
+                return res
+
+            # Layer E is available only outside the default Jentic fast profiles.
             layer_e_start = time.time()
             try:
                 layer_e_result = self.layer_e_judge.call_judge(analysis_text)

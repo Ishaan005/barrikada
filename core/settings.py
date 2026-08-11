@@ -1,7 +1,30 @@
 import os
+import warnings
 from pathlib import Path
 
 from pydantic import BaseModel
+
+
+_WARNED_ALIASES: set[str] = set()
+
+
+def env_value(name: str, default: str | None = None) -> str | None:
+    """Return a canonical BARRIKADE setting with a deprecated alias fallback."""
+    value = os.getenv(name)
+    if value is not None:
+        return value
+    legacy_name = name.replace("BARRIKADE_", "BARRIKADA_", 1)
+    value = os.getenv(legacy_name)
+    if value is not None:
+        if legacy_name not in _WARNED_ALIASES:
+            warnings.warn(
+                f"{legacy_name} is deprecated; use {name}.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _WARNED_ALIASES.add(legacy_name)
+        return value
+    return default
 
 
 class Settings(BaseModel):
@@ -12,7 +35,7 @@ class Settings(BaseModel):
 
     @staticmethod
     def _env_path(env_var):
-        value = os.getenv(env_var)
+        value = env_value(env_var)
         if not value:
             return None
         return Path(value).expanduser().resolve()
@@ -75,14 +98,14 @@ class Settings(BaseModel):
     @property
     def core_models_dir(self) -> str:
         return self._path_with_override(
-            "BARRIKADA_CORE_MODELS_DIR",
+            "BARRIKADE_CORE_MODELS_DIR",
             self._package_root / "models",
         )
 
     @property
     def bundle_root_dir(self) -> str:
         return self._path_with_override(
-            "BARRIKADA_BUNDLE_DIR",
+            "BARRIKADE_BUNDLE_DIR",
             self._user_state_root / "bundle",
         )
 
@@ -90,7 +113,7 @@ class Settings(BaseModel):
     def artifacts_root_dir(self) -> str:
         default_root = Path(self.bundle_root_dir)
         return self._path_with_override(
-            "BARRIKADA_ARTIFACTS_DIR",
+            "BARRIKADE_ARTIFACTS_DIR",
             default_root,
         )
 
@@ -98,13 +121,13 @@ class Settings(BaseModel):
     def bundle_manifest_path(self) -> str:
         default_path = Path(self.bundle_root_dir) / "manifest.json"
         return self._path_with_override(
-            "BARRIKADA_BUNDLE_MANIFEST_PATH",
+            "BARRIKADE_BUNDLE_MANIFEST_PATH",
             default_path,
         )
 
     @property
     def max_download_workers(self) -> int:
-        val = os.getenv("BARRIKADA_MAX_DOWNLOAD_WORKERS")
+        val = env_value("BARRIKADE_MAX_DOWNLOAD_WORKERS")
         if val:
             try:
                 return int(val)
@@ -113,7 +136,7 @@ class Settings(BaseModel):
         return 8
 
     # Models are centrally managed under `core/models/` (see
-    # `BARRIKADA_CORE_MODELS_DIR` override). For hosting details,
+    # `BARRIKADE_CORE_MODELS_DIR` override). For hosting details,
     # refer to `docs/MODEL_HOSTING.md`.
 
     ### Telemetry & Audit Configuration
@@ -161,7 +184,7 @@ class Settings(BaseModel):
     @property
     def layer_b_signatures_dir(self):
         return self._existing_path_with_override(
-            "BARRIKADA_LAYER_B_SIGNATURES_DIR",
+            "BARRIKADE_LAYER_B_SIGNATURES_DIR",
             self.layer_b_signatures_candidates,
             "Layer B signatures directory",
         )
@@ -225,7 +248,7 @@ class Settings(BaseModel):
 
     @property
     def dataset_path(self):
-        override = self._env_path("BARRIKADA_DATASET_PATH")
+        override = self._env_path("BARRIKADE_DATASET_PATH")
         if override is not None:
             return str(override)
         return str(self._repo_root / "datasets" / "barrikade.csv")
@@ -233,14 +256,14 @@ class Settings(BaseModel):
     @property
     def layer_c_release_dir(self):
         return self._path_with_override(
-            "BARRIKADA_LAYER_C_RELEASE_DIR",
+            "BARRIKADE_LAYER_C_RELEASE_DIR",
             Path(self.core_models_dir) / "layer_c" / "releases",
         )
 
     @property
     def model_path(self):
         return self._existing_path_with_override(
-            "BARRIKADA_LAYER_C_MODEL_PATH",
+            "BARRIKADE_LAYER_C_MODEL_PATH",
             self.layer_c_model_candidates,
             "Layer C classifier model",
         )
@@ -249,8 +272,11 @@ class Settings(BaseModel):
     def layer_c_model_candidates(self) -> list[Path]:
         legacy = self._package_root / "layer_c" / "outputs" / "classifier.joblib"
         return [
+            Path(self.core_models_dir) / "layer_c" / "classifier.onnx",
             Path(self.core_models_dir) / "layer_c" / "classifier.joblib",
+            Path(self.bundle_root_dir) / "layer_c" / "classifier.onnx",
             Path(self.bundle_root_dir) / "layer_c" / "classifier.joblib",
+            Path(self.artifacts_root_dir) / "layer_c" / "classifier.onnx",
             Path(self.artifacts_root_dir) / "layer_c" / "classifier.joblib",
             legacy,
         ]
@@ -298,14 +324,14 @@ class Settings(BaseModel):
     @property
     def layer_d_release_dir(self):
         return self._path_with_override(
-            "BARRIKADA_LAYER_D_RELEASE_DIR",
+            "BARRIKADE_LAYER_D_RELEASE_DIR",
             Path(self.core_models_dir) / "layer_d" / "releases",
         )
 
     @property
     def layer_d_output_dir(self):
         return self._existing_path_with_override(
-            "BARRIKADA_LAYER_D_MODEL_DIR",
+            "BARRIKADE_LAYER_D_MODEL_DIR",
             self.layer_d_model_candidates,
             "Layer D model directory",
         )
@@ -314,8 +340,11 @@ class Settings(BaseModel):
     def layer_d_model_candidates(self) -> list[Path]:
         legacy = self._package_root / "layer_d" / "outputs" / "model"
         return [
+            Path(self.core_models_dir) / "layer_d" / "onnx",
             Path(self.core_models_dir) / "layer_d" / "model",
+            Path(self.bundle_root_dir) / "layer_d" / "onnx",
             Path(self.bundle_root_dir) / "layer_d" / "model",
+            Path(self.artifacts_root_dir) / "layer_d" / "onnx",
             Path(self.artifacts_root_dir) / "layer_d" / "model",
             legacy,
         ]
@@ -327,7 +356,7 @@ class Settings(BaseModel):
     @property
     def layer_d_report_path(self):
         return self._output_file_with_override(
-            "BARRIKADA_LAYER_D_REPORT_PATH",
+            "BARRIKADE_LAYER_D_REPORT_PATH",
             self._default_results_dir() / "layer_d_eval_latest.json",
         )
 
@@ -357,7 +386,7 @@ class Settings(BaseModel):
     @property
     def layer_e_output_dir(self):
         return self._output_dir_with_override(
-            "BARRIKADA_LAYER_E_OUTPUT_DIR",
+            "BARRIKADE_LAYER_E_OUTPUT_DIR",
             self._default_layer_e_output_dir(),
         )
 
@@ -368,14 +397,14 @@ class Settings(BaseModel):
     @property
     def layer_e_teacher_report_path(self):
         return self._output_file_with_override(
-            "BARRIKADA_LAYER_E_TEACHER_REPORT_PATH",
+            "BARRIKADE_LAYER_E_TEACHER_REPORT_PATH",
             self._default_results_dir() / "layer_e_teacher_eval_latest.json",
         )
 
     @property
     def layer_e_model_dir(self):
         return self._existing_path_with_override(
-            "BARRIKADA_LAYER_E_MODEL_DIR",
+            "BARRIKADE_LAYER_E_MODEL_DIR",
             self.layer_e_model_candidates,
             "Layer E model directory",
         )

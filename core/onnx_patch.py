@@ -1,5 +1,6 @@
 import sys
 import types
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 
 import onnxruntime as ort
@@ -107,6 +108,8 @@ class ORTModelForSequenceClassification(ORTModelMock):
 def apply_patch():
     optimum = types.ModuleType("optimum")
     onnxruntime = types.ModuleType("optimum.onnxruntime")
+    optimum.__spec__ = ModuleSpec("optimum", loader=None, is_package=True)
+    onnxruntime.__spec__ = ModuleSpec("optimum.onnxruntime", loader=None)
     optimum.onnxruntime = onnxruntime
     onnxruntime.ONNX_WEIGHTS_NAME = "model.onnx"
     onnxruntime.ORTModelForFeatureExtraction = ORTModelForFeatureExtraction

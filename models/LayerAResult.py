@@ -53,7 +53,7 @@ class LayerAResult(LayerResult):
             return "allow"
 
         # High severity flags that should block immediately
-        high_severity_flags = ["direction_override", "embedded_encodings"]
+        high_severity_flags = ["direction_override", "embedded_instruction"]
         if any(flag in self.flags for flag in high_severity_flags):
             return "block"
 
@@ -72,7 +72,7 @@ class LayerAResult(LayerResult):
 
         risk_weights = {
             "direction_override": 30.0,
-            "embedded_encodings": 30.0,
+            "embedded_instruction": 30.0,
             "confusable_chars": 15.0,
             "possible_base64": 8.0,
         }

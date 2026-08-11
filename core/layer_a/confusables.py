@@ -10,6 +10,10 @@ logger = logging.getLogger(__name__)
 
 # Reference the paper
 def script_distribution(text):
+    if text.isascii():
+        latin = sum(character.isalpha() for character in text)
+        other = len(text) - latin
+        return {key: value for key, value in {"Latin": latin, "Other": other}.items() if value}
     scripts = Counter()
     for ch in text:
         match = regex.match(
@@ -45,6 +49,19 @@ def detect_confusables(text, expected_script="Latin", threshold=0.1):
         percent_non_expected = 0.0
 
     amogus_sus = percent_non_expected > threshold
+
+    # Unicode homoglyphs cannot be present in a pure ASCII string. This also
+    # avoids constructing large diagnostic structures for ordinary API text.
+    if text.isascii():
+        return {
+            "script_counts": scripts,
+            "percent_non_expected": percent_non_expected,
+            "is_dangerous": False,
+            "is_mixed_script": False,
+            "has_confusables": False,
+            "confusable_details": None,
+            "suspicious": False,
+        }
 
     # Check for dangerous confusable characters
     is_dangerous = False

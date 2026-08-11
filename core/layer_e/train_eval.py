@@ -69,7 +69,7 @@ def train_teacher_qwen35(
         random_state=settings.layer_c_seed,
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)  # nosec B615
+    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=False)  # nosec B615
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -97,7 +97,7 @@ def train_teacher_qwen35(
         quantization_config=bnb_config,
         device_map="auto",
         dtype=torch.bfloat16,
-        trust_remote_code=True,
+        trust_remote_code=False,
     )
 
     lora_config = LoraConfig(

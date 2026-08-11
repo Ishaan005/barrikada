@@ -55,6 +55,18 @@ def test_detect_success_with_diagnostics(monkeypatch):
     assert payload["result"]["decision_layer"] == "layer_c"
 
 
+def test_production_diagnostics_are_denied(monkeypatch):
+    state.pipeline = _FakePipeline()  # type: ignore
+    state.startup_error = None
+    monkeypatch.setenv("BARRIKADE_ALLOW_DIAGNOSTICS", "false")
+
+    client = TestClient(app)
+    resp = client.post("/v1/detect", json={"text": "hello", "include_diagnostics": True})
+
+    assert resp.status_code == 403
+    assert resp.json() == {"detail": "Diagnostics are disabled in this service."}
+
+
 def test_detect_unavailable_pipeline_returns_503():
     state.pipeline = None
     state.startup_error = "Pipeline boot failed"

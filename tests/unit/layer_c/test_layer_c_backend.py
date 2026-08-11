@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from core.layer_c.classifier import Classifier
+from core.onnx_encoder import OnnxSentenceEncoder
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -184,14 +185,7 @@ def test_layer_c_prefers_onnx_encoder_when_available():
 
     clf = Classifier(model_path=str(JOBLIB_PATH))
 
-    # The inner model type tells us which encoder backend got loaded. The
-    # ONNX path uses optimum.onnxruntime.ORTModel*; PT path uses a regular
-    # transformers PreTrainedModel.
-    inner_model_type = type(clf.encoder[0].auto_model).__name__
-    assert "ORT" in inner_model_type, (
-        f"expected ONNX encoder backend (ORTModel*), got {inner_model_type}. "
-        "Classifier may have fallen back to the PT encoder."
-    )
+    assert isinstance(clf.encoder, OnnxSentenceEncoder)
 
     # Functional check: predict() still routes correctly.
     result = clf.predict(SAMPLE_INPUTS[0])

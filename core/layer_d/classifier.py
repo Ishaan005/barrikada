@@ -4,13 +4,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import core.onnx_patch  # noqa: F401
-
-
-# Keep the compatibility patch above ML libraries that import Optimum.
-# isort: split
-import torch
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, PreTrainedTokenizerFast
+import numpy as np
+from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
 from models.LayerDResult import LayerDResult
 
@@ -34,7 +29,11 @@ class LayerDClassifier:
     @staticmethod
     def _load_tokenizer(model_dir):
         try:
-            return AutoTokenizer.from_pretrained(model_dir)  # nosec B615
+            return AutoTokenizer.from_pretrained(  # nosec B615
+                model_dir,
+                local_files_only=True,
+                trust_remote_code=False,
+            )
         except ValueError as exc:
             if "Tokenizer class" not in str(exc):
                 raise
@@ -81,22 +80,26 @@ class LayerDClassifier:
         onnx_dir = Path(model_dir).parent / "onnx"
         if onnx_dir.exists() and self._is_onnx_classifier_dir_ready(onnx_dir):
             log.info("Loading ONNX Layer D classifier: %s", onnx_dir)
-            # Optimum is loaded only when a complete ONNX backend is selected.
-            from optimum.onnxruntime import (  # noqa: PLC0415
-                ORTModelForSequenceClassification,
-            )
+            import onnxruntime as ort  # noqa: PLC0415
 
             tokenizer = self._load_tokenizer(str(onnx_dir))
-            model = ORTModelForSequenceClassification.from_pretrained(
-                str(onnx_dir),
-                provider="CPUExecutionProvider",
+            model = ort.InferenceSession(
+                str(onnx_dir / "model.onnx"),
+                providers=["CPUExecutionProvider"],
             )
             return tokenizer, model, "cpu", True
 
         log.info("Loading PT Layer D classifier: %s", model_dir)
+        import torch  # noqa: PLC0415
+        from transformers import AutoModelForSequenceClassification  # noqa: PLC0415
+
         device = "cuda" if torch.cuda.is_available() else "cpu"
         tokenizer = self._load_tokenizer(model_dir)
-        model = AutoModelForSequenceClassification.from_pretrained(model_dir)  # nosec B615
+        model = AutoModelForSequenceClassification.from_pretrained(  # nosec B615
+            model_dir,
+            local_files_only=True,
+            trust_remote_code=False,
+        )
         model.to(device)
         model.eval()
         return tokenizer, model, device, False
@@ -115,6 +118,28 @@ class LayerDClassifier:
         self.thresholds.validate()
 
     def _score_batch(self, texts):
+        if self._is_onnx:
+            encoded = self.tokenizer(
+                texts,
+                truncation=True,
+                max_length=self.max_length,
+                padding=True,
+                return_tensors="np",
+            )
+            input_names = {item.name for item in self.model.get_inputs()}
+            inputs = {
+                key: np.asarray(value, dtype=np.int64)
+                for key, value in encoded.items()
+                if key in input_names
+            }
+            logits = np.asarray(self.model.run(None, inputs)[0], dtype=np.float32)
+            logits -= logits.max(axis=-1, keepdims=True)
+            probabilities = np.exp(logits)
+            probabilities /= probabilities.sum(axis=-1, keepdims=True)
+            return probabilities[:, 1]
+
+        import torch  # noqa: PLC0415
+
         encoded = self.tokenizer(
             texts,
             truncation=True,

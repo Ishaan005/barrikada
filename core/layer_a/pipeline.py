@@ -76,9 +76,10 @@ def analyze_text(input_bytes):
     cleaned = strip_suspicious_characters(cleaned_punct)
 
     # Step 6: Look for embedded encodings (base64, hex, url, html)
-    embedded_result = detect_and_decode_embedded(cleaned)
-    if embedded_result.get("suspicious") or len(embedded_result.get("findings", [])) > 0:
-        add_flag("embedded_encodings")
+    embedded_result = detect_and_decode_embedded(cleaned, include_decoded_text=True)
+    decoded_texts = embedded_result.pop("_decoded_texts", [])
+    if embedded_result.get("suspicious"):
+        add_flag("embedded_instruction")
 
     # Step 7: Check for direction override attacks on ORIGINAL text
     # (before cleaning removed them)
@@ -86,7 +87,9 @@ def analyze_text(input_bytes):
         add_flag("direction_override")
 
     # Final canonical version (cleaned text is already normalized)
-    final_text = cleaned
+    # Printable decoded text is routed through all downstream detector layers. Successful
+    # decoding alone is not an attack signal; opaque binary is not appended.
+    final_text = "\n".join([cleaned, *decoded_texts])
 
     # Calculate processing time
     processing_time_ms = (time.time() - start_time) * 1000
@@ -115,7 +118,7 @@ def _calculate_confidence(flags):
     if not flags:
         return 1.0  # High confidence in clean text
 
-    high_confidence_flags = ["direction_override", "embedded_encodings"]
+    high_confidence_flags = ["direction_override", "embedded_instruction"]
     medium_confidence_flags = ["confusable_chars", "suspicious_encoding"]
 
     has_high = any(flag in flags for flag in high_confidence_flags)

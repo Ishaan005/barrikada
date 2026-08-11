@@ -22,7 +22,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install build tools
         run: |
@@ -31,6 +31,15 @@ jobs:
 
       - name: Build package
         run: python -m build
+
+      - name: Build matching Jentic plugin wheel
+        run: python -m build --wheel --outdir plugin-dist integrations/jentic-one
+
+      - name: Upload Jentic plugin wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: barrikade-jentic-wheel
+          path: plugin-dist/*.whl
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

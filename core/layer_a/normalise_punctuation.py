@@ -30,7 +30,8 @@ def normalise_punctuation_and_whitespace(text):
     fixed = text.replace("\r\n", "\n").replace("\r", "\n")
 
     # Step 2: ftfy fixes mojibake and other Unicode issues
-    fixed = ftfy.fix_text(fixed)
+    if not fixed.isascii():
+        fixed = ftfy.fix_text(fixed)
 
     # Step 3: Normalize quote characters to ASCII equivalents
     quotes_map = {

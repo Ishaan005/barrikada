@@ -3,12 +3,14 @@
 import os
 import platform
 
+from core.settings import env_value
 
-def _configure_safe_runtime() -> None:
+
+def configure_safe_runtime() -> None:
     if platform.system() != "Darwin":
         return
 
-    if os.getenv("BARRIKADA_SAFE_RUNTIME") == "0":
+    if env_value("BARRIKADE_SAFE_RUNTIME") == "0":
         return
 
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -34,4 +36,4 @@ def _configure_safe_runtime() -> None:
         pass
 
 
-_configure_safe_runtime()
+__all__ = ["configure_safe_runtime"]

@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1.7
+# Release automation supplies three immutable inputs:
+#   core-runtime: the image built from Dockerfile
+#   bundle: a directory containing a signed manifest.json and fast-profile models
+#   public-key: a directory containing bundle-public.pem
+ARG CORE_RUNTIME_IMAGE=ghcr.io/barrikade/core-runtime:0.2.0
+FROM ${CORE_RUNTIME_IMAGE}
+
+USER root
+COPY --from=bundle --chown=barrikade:barrikade / /models/
+COPY --from=public-key --chown=barrikade:barrikade /bundle-public.pem /etc/barrikade/bundle-public.pem
+USER barrikade

@@ -1,18 +1,25 @@
 import os
 
 
-os.environ.setdefault("BARRIKADA_SKIP_IMPORT_BUNDLE_CHECK", "1")
-os.environ.setdefault("BARRIKADA_AUTO_DOWNLOAD_ARTIFACTS", "0")
+os.environ.setdefault("BARRIKADE_AUTO_DOWNLOAD_ARTIFACTS", "0")
+for thread_setting in (
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
+    os.environ.setdefault(thread_setting, "1")
 
 import core.onnx_patch  # noqa: E402, F401
 
 
 # Apply the Optimum compatibility patch before loading sentence-transformers.
 # isort: split
-import hashlib
+import hashlib  # noqa: E402
 
-import numpy as np
-import sentence_transformers
+import numpy as np  # noqa: E402
+import sentence_transformers  # noqa: E402
 
 
 # Store the original class

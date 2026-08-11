@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=83.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "barrikade-jentic"
+version = "0.2.0"
+description = "Thin Barrikade integration for Jentic One"
+requires-python = ">=3.12"
+dependencies = [
+  "httpx>=0.28.0,<1",
+  "jentic-one>=0.29.1,<0.30",
+  "pydantic>=2.12.0,<3",
+]
+
+[project.scripts]
+barrikade-jentic = "barrikade_jentic.bootstrap:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["barrikade_jentic", "barrikade_jentic.*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "../../../../Barrikade/Repos/jentic-one/src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+required-version = "==0.15.14"
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "PLC0415", "UP006", "UP007", "UP035", "UP045"]
+preview = true
+explicit-preview-rules = true

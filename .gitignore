@@ -1,4 +1,4 @@
-/build/
+**/build/
 /dist/
 /artifact-manifest.json
 /datasets/
@@ -14,8 +14,12 @@
 /core/layer_b/outputs/
 /core/layer_c/outputs/*.joblib
 /core/layer_c/outputs/*.onnx
+/core/layer_c/outputs/encoder_onnx/
 /core/layer_c/outputs/releases/**/classifier.joblib
 /core/layer_d/outputs/model/
+/core/layer_d/outputs/onnx/
+/core/layer_d/outputs/onnx-int8/
+/core/layer_d/outputs/onnx-optimized/
 /core/layer_d/outputs/releases/**/model/
 /core/layer_e/outputs/
 /core/models/
@@ -60,6 +64,7 @@ venv
 
 # Local test cache
 .pytest_cache/
+**/.ruff_cache/
 
 # Run logs
 *.log

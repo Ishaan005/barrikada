@@ -10,38 +10,33 @@ This repository ships an API-first production container for Barrikade detection.
 
 `scripts/agent.py` is intentionally not used as container entrypoint. It remains a local testing tool.
 
-## Build
+## Runtime base build
 
 ```bash
 docker build --target production -t barrikade/api:latest .
 ```
 
-## Run
+The runtime base intentionally has no model bundle. Release automation combines it with the signed
+bundle and public key using `Dockerfile.release`.
+
+## Run the published release
 
 ```bash
 docker run --rm -p 8000:8000 \
-  barrikade/api:latest
+  ghcr.io/barrikade/core:0.2.0
 ```
 
-By default the container downloads runtime models from the public
-`barrikade-bundles` bucket if no valid local models are present.
-
-To override the bucket:
-
-```bash
-docker run --rm -p 8000:8000 \
-  -e BARRIKADA_GCS_BUCKET=<public-gcs-bucket> \
-  barrikade/api:latest
-```
-
-To use local models instead of GCS, mount them at `/app/core/models`.
+The published release image contains a signed, digest-pinned fast-profile bundle. Startup verifies
+the manifest and every artifact before readiness succeeds. The serving container does not download
+models and can run without internet egress. Release automation assembles that image with
+`Dockerfile.release`; ordinary users do not run an artifact preparation step.
 
 See `docs/MODEL_HOSTING.md` for details on model distribution and configuration.
 
 ## Compose (Recommended)
 
 ```bash
-docker compose up --build
+docker compose up
 ```
 
 `docker-compose.yml` starts:
@@ -77,24 +72,18 @@ Set `include_diagnostics=true` to receive full per-layer output.
 ## Health Endpoints
 
 - `GET /health/live`: process alive
-- `GET /health/ready`: pipeline initialized and local Layer E judge ready
+- `GET /health/ready`: active profile and verified bundle initialized
 
 ## Environment
 
-- `BARRIKADA_GCS_BUCKET`: optional public bucket override for runtime models
-- `HF_HOME`: Hugging Face cache root
-- `HUGGINGFACE_HUB_CACHE`: Hugging Face hub cache path
-- `SENTENCE_TRANSFORMERS_HOME`: sentence-transformers cache path
+- `BARRIKADE_ACTIVE_PROFILE`: active assessment profile
+- `BARRIKADE_BUNDLE_MANIFEST_PATH`: signed manifest path
+- `BARRIKADE_BUNDLE_PUBLIC_KEY_PATH`: Ed25519 public-key path
+- `BARRIKADE_CORE_MODELS_DIR`: read-only model root
 
-The image validates any models already present under `/app/core/models`. If no
-valid models are present, it downloads all runtime models from GCS before
-launching the API.
-
-Models are automatically downloaded from Google Cloud Storage on container startup.
-For offline deployment or custom model sources, see `docs/MODEL_HOSTING.md`.
+For offline release assembly or custom model sources, see `docs/MODEL_HOSTING.md`.
 
 ## Notes
 
-- Container uses `requirements.runtime.txt` to avoid shipping training/notebook/test dependencies in production image.
+- Container uses `requirements.fast.txt` and excludes Layer E, training, notebooks, datasets, and upload tooling.
 - Container runs as non-root user (`uid=1000`) for safer production defaults.
-- Cache volumes are mounted under `/home/barrikade/.cache/*` to keep write permissions aligned with non-root runtime.

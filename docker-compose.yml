@@ -1,32 +1,15 @@
 services:
   barrikade-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-    image: barrikade/api:latest
+    image: ${BARRIKADE_CORE_IMAGE:-ghcr.io/barrikade/core:0.2.0}
     container_name: barrikade-api
     environment:
-      # The entrypoint defaults BARRIKADA_GCS_BUCKET to "barrikade-bundles"
-      # (see docker_entrypoint.sh), so this line is only useful when you
-      # need to point at a different bucket. Uncomment to override.
-      # BARRIKADA_GCS_BUCKET: my-custom-bucket
-      HF_HOME: /home/barrikade/.cache/huggingface
-      HUGGINGFACE_HUB_CACHE: /home/barrikade/.cache/huggingface/hub
-      SENTENCE_TRANSFORMERS_HOME: /home/barrikade/.cache/sentence_transformers
+      BARRIKADE_SERVICE_TOKEN: ${BARRIKADE_SERVICE_TOKEN:-local-development-token}
+      BARRIKADE_DATABASE_URL: sqlite:////var/lib/barrikade/metadata.db
+      BARRIKADE_AUTO_MIGRATE: "true"
     ports:
       - "8000:8000"
     volumes:
-      # Persist model artifacts across container restarts. Without this,
-      # docker_entrypoint.sh re-downloads ~2-3 GB from GCS every time the
-      # container starts fresh (Kubernetes pod restarts, autoscaling events,
-      # `docker compose down && up`, etc.). With the volume, the first start
-      # populates it and every subsequent start reuses the cached bundle.
-      - barrikade_models:/app/core/models
-      - hf_cache_user:/home/barrikade/.cache/huggingface
-      - st_cache_user:/home/barrikade/.cache/sentence_transformers
+      - barrikade_metadata:/var/lib/barrikade
 
 volumes:
-  barrikade_models:
-  hf_cache_user:
-  st_cache_user:
+  barrikade_metadata:

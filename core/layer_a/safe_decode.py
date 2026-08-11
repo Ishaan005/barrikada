@@ -26,11 +26,18 @@ def safe_decode(
     detection_confidence = 0.0
     utf8_decode_errors = 0
 
-    # First, always try UTF-8 to detect actual decode errors
+    # Strict UTF-8 success is conclusive. Avoid running a statistical charset
+    # detector over large API responses when the bytes already decode exactly.
     try:
-        raw_bytes.decode("utf-8", errors="strict")
-        # If this succeeds, UTF-8 is perfect
-        utf8_decode_errors = 0
+        utf8_text = raw_bytes.decode("utf-8", errors="strict")
+        return utf8_text, {
+            "encoding_used": "utf-8",
+            "decode_replacements": 0,
+            "suspicious": False,
+            "detection_confidence": 1.0,
+            "attempted_encodings": ["utf-8"],
+            "utf8_decode_errors": 0,
+        }
     except UnicodeDecodeError:
         # Count how many bytes would cause errors
         utf8_decode_errors = len([b for b in raw_bytes if b > 127])  # Rough estimate

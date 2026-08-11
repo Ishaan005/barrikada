@@ -3,16 +3,10 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import core.onnx_patch  # noqa: F401
-
-
-# Keep the compatibility patch above ML libraries that import Optimum.
-# isort: split
 import joblib
 import numpy as np
-import torch
-from sentence_transformers import SentenceTransformer
 
+from core.onnx_encoder import OnnxSentenceEncoder
 from models.LayerCResult import LayerCResult
 
 
@@ -56,11 +50,12 @@ class Classifier:
 
         if onnx_dir is not None:
             log.info("Loading ONNX Layer C encoder: %s", onnx_dir)
-            return SentenceTransformer(
-                str(onnx_dir),
-                backend="onnx",
-                model_kwargs={"providers": ["CPUExecutionProvider"]},
-            )
+            return OnnxSentenceEncoder(onnx_dir)
+
+        import torch  # noqa: PLC0415
+        from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+
+        import core.onnx_patch  # noqa: F401, PLC0415
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         log.info("Loading PT Layer C encoder: %s (device=%s)", embedding_model, device)

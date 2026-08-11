@@ -60,6 +60,7 @@ SUSPICIOUS_KEYWORDS = [  # heuristics for prompt injection
     "system prompt",
 ]
 MAX_B64_GROUPS = 5
+MAX_DECODE_RECURSION = 2
 
 _re_base64 = re.compile(r"(?:[A-Za-z0-9+/]{4}){16,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?")
 # more permissive but still long pattern; will verify divisibility later
@@ -251,12 +252,20 @@ def try_html_unescape(text):
 # Top-level orchestrator
 # This orchestrator was enhanced using AI
 # -----------------------
-def detect_and_decode_embedded(text, try_decode=True, max_total_decoded=MAX_TOTAL_DECODE_BYTES):
+def detect_and_decode_embedded(
+    text,
+    try_decode=True,
+    max_total_decoded=MAX_TOTAL_DECODE_BYTES,
+    *,
+    include_decoded_text=False,
+    _depth=0,
+):
     """
     Given an input Unicode `text`, detect embedded encodings and (optionally) decode them.
     Returns metadata structure describing findings and a list of decoded candidate blobs (hashed only).
     """
     findings = []
+    decoded_texts = []
     total_decoded_bytes = 0
 
     # 1) Base64 - find candidate long base64 substrings
@@ -276,7 +285,10 @@ def detect_and_decode_embedded(text, try_decode=True, max_total_decoded=MAX_TOTA
                 findings.append(m)
                 continue
 
-            decoded, meta = try_base64_decode(candidate, max_bytes=MAX_DECODE_BYTES)
+            decoded, meta = try_base64_decode(
+                candidate,
+                max_bytes=min(MAX_DECODE_BYTES, max_total_decoded - total_decoded_bytes),
+            )
             m.update(meta)
 
             if meta.get("ok") and decoded:
@@ -285,6 +297,8 @@ def detect_and_decode_embedded(text, try_decode=True, max_total_decoded=MAX_TOTA
                 m["likely_text"] = meta["printable_ratio"] >= MIN_PRINTABLE_RATIO
                 m["sha256"] = meta["sha256"]
                 m["suspicious_keywords"] = meta.get("suspicious_keywords", [])
+                if m["likely_text"]:
+                    decoded_texts.append(decoded.decode("utf-8", errors="ignore"))
             findings.append(m)
 
     # 2) URL percent-encoding
@@ -292,10 +306,15 @@ def detect_and_decode_embedded(text, try_decode=True, max_total_decoded=MAX_TOTA
         m = {"detected": "url_percent"}
 
         if try_decode and total_decoded_bytes < max_total_decoded:
-            decoded, meta = try_url_percent_decode(text, max_bytes=MAX_DECODE_BYTES)
+            decoded, meta = try_url_percent_decode(
+                text,
+                max_bytes=min(MAX_DECODE_BYTES, max_total_decoded - total_decoded_bytes),
+            )
             m.update(meta)
             if meta.get("ok"):
                 total_decoded_bytes += meta.get("decoded_len", 0)
+                if decoded != text:
+                    decoded_texts.append(decoded)
         else:
             m["note"] = "decode_disabled_or_limits"
 
@@ -312,10 +331,15 @@ def detect_and_decode_embedded(text, try_decode=True, max_total_decoded=MAX_TOTA
             continue
 
         if try_decode and total_decoded_bytes < max_total_decoded:
-            decoded, meta = try_hex_decode(hexgroup, max_bytes=MAX_DECODE_BYTES)
+            decoded, meta = try_hex_decode(
+                hexgroup,
+                max_bytes=min(MAX_DECODE_BYTES, max_total_decoded - total_decoded_bytes),
+            )
             m.update(meta)
             if meta.get("ok"):
                 total_decoded_bytes += meta.get("decoded_len", 0)
+                if decoded and meta.get("printable_ratio", 0) >= MIN_PRINTABLE_RATIO:
+                    decoded_texts.append(decoded.decode("utf-8", errors="ignore"))
         else:
             m["note"] = "decode_disabled_or_limits"
 
@@ -326,31 +350,41 @@ def detect_and_decode_embedded(text, try_decode=True, max_total_decoded=MAX_TOTA
         decoded, meta = try_html_unescape(text)
         meta["detected"] = "html_entities"
         findings.append(meta)
+        if meta.get("ok") and decoded != text:
+            decoded_texts.append(decoded)
+
+    if _depth < MAX_DECODE_RECURSION:
+        for decoded_text in tuple(decoded_texts):
+            remaining = max_total_decoded - total_decoded_bytes
+            if remaining <= 0:
+                break
+            nested = detect_and_decode_embedded(
+                decoded_text,
+                try_decode=try_decode,
+                max_total_decoded=remaining,
+                include_decoded_text=True,
+                _depth=_depth + 1,
+            )
+            total_decoded_bytes += nested["total_decoded_bytes"]
+            for finding in nested["findings"]:
+                finding["depth"] = _depth + 1
+                findings.append(finding)
+            decoded_texts.extend(nested.get("_decoded_texts", []))
 
     # Build top-level sus flag
-    suspicious = any(
-        (
-            f.get("ok")
-            and (
-                (f.get("printable_ratio", 0) >= MIN_PRINTABLE_RATIO) or f.get("suspicious_keywords")
-            )
-        )
-        or (
-            f.get("detected") in ("hex", "base64")
-            and f.get("reason") is None
-            and not f.get("ok")
-            and f.get("note") is None
-        )
-        for f in findings
-    )
+    suspicious = any(f.get("suspicious_keywords") for f in findings)
 
     # # For logs: DO NOT log any decoded plaintext. Only log counts, sha256, and reasons.
     # for f in findings:
     #     safe_log = {k: v for k, v in f.items() if k in ("detected", "ok", "reason", "note", "sha256", "printable_ratio", "suspicious_keywords", "detected")}
     #     print(f"DEBUG: Finding: {safe_log}")
 
-    return {
+    result = {
         "findings": findings,
         "suspicious": suspicious,
         "total_decoded_bytes": total_decoded_bytes,
     }
+    if include_decoded_text:
+        # This private field is consumed immediately by Layer A and is never serialized.
+        result["_decoded_texts"] = decoded_texts
+    return result

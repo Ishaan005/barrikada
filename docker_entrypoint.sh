@@ -2,7 +2,7 @@
 # Container entrypoint that downloads models from GCS before starting the API server.
 #
 # Optional environment variables:
-#   BARRIKADA_GCS_BUCKET: GCS bucket name (must be publicly readable)
+#   BARRIKADE_GCS_BUCKET: GCS bucket name (must be publicly readable)
 #
 # If valid local models already exist under /app/core/models, the container uses
 # them as-is and skips the GCS download.
@@ -39,7 +39,7 @@ has_local_models() {
 
 # Download models from GCS
 download_models_from_gcs() {
-    local bucket="${BARRIKADA_GCS_BUCKET:-$DEFAULT_GCS_BUCKET}"
+    local bucket="${BARRIKADE_GCS_BUCKET:-${BARRIKADA_GCS_BUCKET:-$DEFAULT_GCS_BUCKET}}"
 
     log_info "Downloading models from GCS (bucket: $bucket)..."
 

@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from uuid import uuid4
 
-from core.settings import Settings
+from core.settings import Settings, env_value
 
 
 log = logging.getLogger(__name__)
@@ -121,15 +121,15 @@ class _DownloadProgress:
 
 
 def _artifact_bucket(bucket_name: str | None = None) -> str:
-    return bucket_name or os.getenv("BARRIKADA_GCS_BUCKET") or DEFAULT_GCS_BUCKET
+    return bucket_name or env_value("BARRIKADE_GCS_BUCKET") or DEFAULT_GCS_BUCKET
 
 
 def _bundle_manifest_object() -> str:
-    return os.getenv("BARRIKADA_BUNDLE_MANIFEST_OBJECT") or DEFAULT_BUNDLE_MANIFEST_OBJECT
+    return env_value("BARRIKADE_BUNDLE_MANIFEST_OBJECT") or DEFAULT_BUNDLE_MANIFEST_OBJECT
 
 
 def _bundle_manifest_url(bucket_name: str | None = None) -> str:
-    override = os.getenv("BARRIKADA_BUNDLE_MANIFEST_URL")
+    override = env_value("BARRIKADE_BUNDLE_MANIFEST_URL")
     if override:
         return override
     bucket = _artifact_bucket(bucket_name)
@@ -730,7 +730,7 @@ def ensure_runtime_bundle(
     local_manifest = _load_manifest(local_manifest_path)
 
     if auto_download is None:
-        auto_download = os.getenv("BARRIKADA_AUTO_DOWNLOAD_ARTIFACTS", "1") != "0"
+        auto_download = env_value("BARRIKADE_AUTO_DOWNLOAD_ARTIFACTS", "1") != "0"
 
     if not auto_download:
         log.info("Auto-download disabled; verifying local runtime artifacts")
@@ -739,12 +739,12 @@ def ensure_runtime_bundle(
             raise ArtifactDownloadError(
                 "Barrikade runtime artifacts are missing for "
                 f"{missing}. Run `python -m barrikade download-artifacts` or set "
-                "BARRIKADA_AUTO_DOWNLOAD_ARTIFACTS=1."
+                "BARRIKADE_AUTO_DOWNLOAD_ARTIFACTS=1."
             )
         if local_manifest is None:
             raise ArtifactDownloadError(
                 "Barrikade runtime manifest is missing. Run `python -m barrikade download-artifacts` "
-                "or set BARRIKADA_AUTO_DOWNLOAD_ARTIFACTS=1."
+                "or set BARRIKADE_AUTO_DOWNLOAD_ARTIFACTS=1."
             )
         _BUNDLE_CHECKED = True
         return

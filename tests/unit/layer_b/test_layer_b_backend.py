@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from core.layer_b.signature_engine import SignatureEngine
+from core.onnx_encoder import OnnxSentenceEncoder
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -78,14 +79,7 @@ def test_signature_engine_prefers_onnx_when_available():
 
     engine = SignatureEngine()
 
-    # The inner model type tells us which backend got loaded. The ONNX
-    # path uses optimum.onnxruntime.ORTModel*; PT path uses a regular
-    # transformers PreTrainedModel.
-    inner_model_type = type(engine.model[0].auto_model).__name__
-    assert "ORT" in inner_model_type, (
-        f"expected ONNX backend (ORTModel*), got {inner_model_type}. "
-        "SignatureEngine may have fallen back to the PT path."
-    )
+    assert isinstance(engine.model, OnnxSentenceEncoder)
 
     # Functional check: detect() returns a sensible verdict on a clear
     # injection prompt.

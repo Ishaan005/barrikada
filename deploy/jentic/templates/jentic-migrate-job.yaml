@@ -1,0 +1,72 @@
+{{- $image := include "barrikade-jentic.jenticImage" . -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-jentic-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "barrikade-jentic.labels" . | nindent 4 }}
+    app.kubernetes.io/component: jentic-migration
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: jentic-migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: {{ $image | quote }}
+          imagePullPolicy: {{ ternary .Values.jentic.barrikadeImage.pullPolicy .Values.jentic.stockImage.pullPolicy .Values.barrikade.enabled }}
+          command: ["python", "-m", "jentic_one.migrations.run"]
+          env:
+            {{- if .Values.barrikade.enabled }}
+            - name: JENTIC__BARRIKADE__ENABLED
+              value: "true"
+            {{- end }}
+            {{- range $key, $value := .Values.jentic.extraEnv }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- if .Values.jentic.config.existingSecret }}
+            - name: JENTIC_CONFIG_FILE
+              value: /etc/jentic/{{ .Values.jentic.config.key }}
+            {{- end }}
+          {{- if or .Values.barrikade.enabled .Values.jentic.config.existingSecret }}
+          volumeMounts:
+            {{- if .Values.barrikade.enabled }}
+            - name: barrikade-token
+              mountPath: /var/run/secrets/barrikade
+              readOnly: true
+            {{- end }}
+            {{- if .Values.jentic.config.existingSecret }}
+            - name: jentic-config
+              mountPath: /etc/jentic
+              readOnly: true
+            {{- end }}
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      {{- if or .Values.barrikade.enabled .Values.jentic.config.existingSecret }}
+      volumes:
+        {{- if .Values.barrikade.enabled }}
+        - name: barrikade-token
+          secret:
+            secretName: {{ include "barrikade-jentic.tokenSecret" . }}
+            items:
+              - key: token
+                path: token
+        {{- end }}
+        {{- if .Values.jentic.config.existingSecret }}
+        - name: jentic-config
+          secret:
+            secretName: {{ .Values.jentic.config.existingSecret }}
+        {{- end }}
+      {{- end }}

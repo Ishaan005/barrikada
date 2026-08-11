@@ -41,7 +41,7 @@ class Qwen3GuardJudge:
     def _load_tokenizer(model_dir):
         log = logging.getLogger(__name__)
         try:
-            tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True)  # nosec B615
+            tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=False)  # nosec B615
             return tokenizer
         except Exception as exc:  # broaden to catch TypeError and other loader failures
             log.warning("AutoTokenizer.from_pretrained failed for %s: %s", model_dir, exc)
@@ -97,7 +97,7 @@ class Qwen3GuardJudge:
         self.model = AutoModelForCausalLM.from_pretrained(  # nosec B615
             self.state.model_dir,
             dtype=self.dtype,
-            trust_remote_code=True,
+            trust_remote_code=False,
         )
         cast(Any, self.model).to(self.device)
         cast(Any, self.model).eval()

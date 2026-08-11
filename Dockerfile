@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -10,20 +10,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.runtime.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.runtime.txt
+COPY requirements.fast.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.fast.txt
 
 
-FROM python:3.11-slim AS production
+FROM python:3.12-slim AS production
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONPATH=/app \
-    HOME=/home/barrikade \
-    HF_HOME=/home/barrikade/.cache/huggingface \
-    HUGGINGFACE_HUB_CACHE=/home/barrikade/.cache/huggingface/hub \
-    SENTENCE_TRANSFORMERS_HOME=/home/barrikade/.cache/sentence_transformers
+    BARRIKADE_CORE_MODELS_DIR=/models \
+    BARRIKADE_ACTIVE_PROFILE=jentic_gateway_fast \
+    BARRIKADE_AUTO_MIGRATE=false \
+    BARRIKADE_ALLOW_DIAGNOSTICS=false \
+    BARRIKADE_VERIFY_ARTIFACTS=true \
+    BARRIKADE_BUNDLE_MANIFEST_PATH=/models/manifest.json \
+    BARRIKADE_BUNDLE_PUBLIC_KEY_PATH=/etc/barrikade/bundle-public.pem
 
 WORKDIR /app
 
@@ -31,21 +34,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --uid 1000 --shell /bin/bash barrikade
-RUN mkdir -p /home/barrikade/.cache/huggingface /home/barrikade/.cache/sentence_transformers \
-    && chown -R barrikade:barrikade /app /home/barrikade
+RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin barrikade \
+    && mkdir -p /models /etc/barrikade /var/lib/barrikade \
+    && chown -R barrikade:barrikade /app /models /etc/barrikade /var/lib/barrikade
 
 COPY --from=builder /install /usr/local
 
 COPY api /app/api
-COPY core /app/core
 COPY models /app/models
-COPY scripts /app/scripts
-COPY docker_entrypoint.sh /app/docker_entrypoint.sh
+COPY barrikade /app/barrikade
+COPY core/__init__.py core/__version__.py core/artifacts.py core/incident_reporter.py \
+    core/intent_scorer.py core/onnx_encoder.py core/orchestrator.py core/risk_budget.py \
+    core/onnx_parity.py \
+    core/session.py core/session_orchestrator.py core/session_settings.py core/settings.py \
+    core/telemetry.py /app/core/
+COPY core/layer_a /app/core/layer_a
+COPY core/layer_b/__init__.py core/layer_b/signature_engine.py /app/core/layer_b/
+COPY core/layer_c/__init__.py core/layer_c/classifier.py /app/core/layer_c/
+COPY core/layer_d/__init__.py core/layer_d/classifier.py /app/core/layer_d/
 
-RUN mkdir -p /app/core/models \
-    && chmod +x /app/docker_entrypoint.sh \
-    && chown -R barrikade:barrikade /app /home/barrikade
+RUN chown -R barrikade:barrikade /app
 
 EXPOSE 8000
 
@@ -54,5 +62,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 USER barrikade
 
-ENTRYPOINT ["/app/docker_entrypoint.sh"]
 CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

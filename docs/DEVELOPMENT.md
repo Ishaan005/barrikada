@@ -6,7 +6,7 @@ Welcome to the Barrikade Developer Guide. This document provides an in-depth loo
 
 ## 1. Local Environment & Setup
 
-We recommend developing on **Python 3.11** to ensure full compatibility with our production Docker containers, though we support any version from **Python 3.10+**.
+Development and production are standardized on **Python 3.12**.
 
 ### Virtual Environment Setup
 1. **Initialize and activate virtual environment:**
@@ -21,7 +21,8 @@ We recommend developing on **Python 3.11** to ensure full compatibility with our
    This command installs runtime dependencies along with development utilities (`pytest`, `pytest-cov`, and `ruff`).
 
 ### Initial Model Bundles Setup
-Barrikade relies on runtime models and datasets distributed via a public Google Cloud Storage bucket. On first import of `barrikade`, the SDK will automatically fetch and unpack the bundle into your `~/.barrikade/bundle/` directory.
+Barrikade relies on runtime models distributed as a bundle. Importing `barrikade` is side-effect
+free; bundle preparation starts only when a pipeline is explicitly constructed.
 
 To trigger the download manually or skip auto-download:
 - **Trigger manual download:**
@@ -31,7 +32,7 @@ To trigger the download manually or skip auto-download:
   ```
 - **Skip automatic check** (by setting the bypass environment variable):
   ```bash
-  export BARRIKADA_SKIP_IMPORT_BUNDLE_CHECK=1
+  export BARRIKADE_AUTO_DOWNLOAD_ARTIFACTS=0
   ```
 For more information, see [MODEL_HOSTING.md](MODEL_HOSTING.md).
 

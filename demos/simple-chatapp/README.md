@@ -18,7 +18,7 @@ streamlit run demo/streamlit_app.py
 
 The demo uses the local Qwen3Guard bundle for baseline and Layer E execution.
 
-If required artifacts are missing, point the demo at `core/models/layer_e/qwen3guard-barrikade` or set `BARRIKADA_LAYER_E_MODEL_DIR`.
+If required artifacts are missing, point the demo at `core/models/layer_e/qwen3guard-barrikade` or set `BARRIKADE_LAYER_E_MODEL_DIR`.
 
 ## Open Day flow
 

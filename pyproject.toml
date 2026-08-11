@@ -7,35 +7,33 @@ name = "barrikade"
 dynamic = ["version"]
 description = "Runtime prompt-injection detection for AI agents."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
   { name = "Barrikade" }
 ]
 dependencies = [
-  "confusable-homoglyphs>=3.3.1",
   "chardet==5.2.0",
+  "confusable-homoglyphs>=3.3.1",
+  "cryptography>=44.0.0",
   "faiss-cpu>=1.13.0",
+  "fastapi>=0.115.0,<1.0",
   "ftfy>=6.3.1",
-  "google-cloud-storage>=2.10.0",
   "joblib>=1.5.0",
   "numpy>=2.3.0",
+  "onnxruntime>=1.22.0",
+  "psycopg[binary]>=3.2.0",
   "pydantic>=2.12.0",
-  "requests>=2.32.0",
   "scikit-learn>=1.7.0",
-  "sentence-transformers>=5.3.0",
-  "torch>=2.12.1",
-  "transformers>=4.57.6",
-  "xgboost>=3.1.0",
+  "transformers>=4.57.6,<6",
+  "uvicorn>=0.38.0",
 ]
 keywords = ["ai", "llm", "security", "prompt-injection", "agents"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Topic :: Security",
   "Topic :: Software Development :: Libraries :: Python Modules",
@@ -48,12 +46,38 @@ Issues = "https://github.com/barrikade-ai/barrikade/issues"
 
 [project.scripts]
 barrikade = "barrikade.__main__:main"
+barrikade-migrate = "barrikade.service.migrate:main"
+
+[project.optional-dependencies]
+layer-e = [
+  "sentence-transformers>=5.3.0",
+  "torch>=2.12.1",
+]
+artifact-download = [
+  "google-cloud-storage>=2.10.0",
+  "requests>=2.32.0",
+  "tqdm>=4.67.0",
+]
+training = [
+  "datasets>=4.4.0",
+  "onnx>=1.22.0",
+  "onnxmltools>=1.16.0",
+  "pandas>=2.3.0",
+  "sentence-transformers>=5.3.0",
+  "torch>=2.12.1",
+  "xgboost>=3.1.0",
+]
+dev = [
+  "pytest>=9.0.0",
+  "pytest-cov>=7.0.0",
+  "ruff==0.15.14",
+]
 
 [tool.setuptools]
 include-package-data = false
 
 [tool.setuptools.packages.find]
-include = ["barrikade", "core", "core.*", "models", "models.*"]
+include = ["api", "barrikade", "barrikade.*", "core", "core.*", "models", "models.*"]
 exclude = ["tests", "tests.*", "docs", "docs.*", "examples", "examples.*", "demos", "demos.*"]
 
 [tool.pytest.ini_options]
@@ -72,7 +96,7 @@ version = {attr = "core.__version__.__version__"}
 
 [tool.ruff]
 required-version = "==0.15.14"
-target-version = "py310"
+target-version = "py312"
 line-length = 100
 exclude = [
     ".git",

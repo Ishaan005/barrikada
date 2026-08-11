@@ -21,10 +21,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install pinned Ruff
         run: python -m pip install ruff==0.15.14
@@ -41,14 +41,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.runtime.txt
+          cache-dependency-path: requirements.fast.txt
 
-      - name: Install requirements.runtime.txt
+      - name: Install requirements.fast.txt
         # This is exactly what the production Docker image installs. If pip
         # can't resolve the pins together (e.g. a transformers version that
         # conflicts with optimum-onnx), this step fails and the rest of the
@@ -56,7 +56,7 @@ jobs:
         # quirks on GitHub-hosted runners (matches publish.yml's pattern).
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.runtime.txt
+          python -m pip install -r requirements.fast.txt
 
       - name: Verify critical runtime imports
         # These are the import paths the runtime layer code actually uses.
@@ -66,10 +66,8 @@ jobs:
         env:
           PYTHONPATH: "."
         run: |
-          python -c "import core.onnx_patch; from optimum.onnxruntime import ORTModelForFeatureExtraction, ORTModelForSequenceClassification"
-          python -c "from sentence_transformers import SentenceTransformer"
           python -c "import onnxruntime"
-          python -c "import torch"
+          python -c "from core.onnx_encoder import OnnxSentenceEncoder"
 
       - name: Smoke import of runtime modules
         # Catches AttributeErrors / import-time crashes in our own code.
@@ -81,16 +79,19 @@ jobs:
           python -c "from core.settings import Settings; Settings()"
           python -c "from api.server import app"
 
+      - name: Verify checked-in Jentic v2 client contract
+        run: python integrations/jentic-one/scripts/check_openapi_contract.py
+
   test-fast:
     name: Fast tests (synthetic data, no artifacts needed)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: requirements.txt
 
@@ -117,9 +118,70 @@ jobs:
 
       - name: Build production image
         # Build only (don't push, don't run). This catches Dockerfile drift
-        # and confirms requirements.runtime.txt resolves inside the actual
-        # python:3.11-slim build context. Pip's wheel resolution can differ
+        # and confirms requirements.fast.txt resolves inside the actual
+        # python:3.12-slim build context. Pip's wheel resolution can differ
         # subtly between the host runner and the container build, so a
         # successful host install in install-runtime is necessary but not
         # sufficient.
         run: docker build --target production -t barrikada/api:ci .
+
+      - name: Build Jentic 0.29.1 overlay image
+        run: docker build -f deploy/jentic/overlay.Dockerfile -t barrikade/jentic-one:ci .
+
+  jentic-plugin:
+    name: Thin Jentic plugin wheel + compatibility tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: integrations/jentic-one/pyproject.toml
+
+      - name: Build and install the thin wheel
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build pytest pytest-asyncio jentic-one==0.29.1
+          python -m build --wheel --outdir /tmp/barrikade-jentic-dist integrations/jentic-one
+          python -m pip install /tmp/barrikade-jentic-dist/barrikade_jentic-*.whl
+
+      - name: Prove interpreter-start registration
+        run: |
+          python -c "from jentic_one.shared.config import registered_config_models; assert 'barrikade' in registered_config_models()"
+          python -c "from jentic_one.registry.ingest import registered_pipeline_stage_specs; assert 'barrikade.specification' in {x.name for x in registered_pipeline_stage_specs()}"
+
+      - name: Run plugin tests against Jentic 0.29.1
+        env:
+          PYTHONPATH: integrations/jentic-one/src
+        run: pytest -q integrations/jentic-one/tests
+
+  helm:
+    name: Single-toggle Helm rendering
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+
+      - name: Lint chart
+        run: helm lint deploy/jentic
+
+      - name: Verify disabled rendering is stock Jentic only
+        run: |
+          helm template test deploy/jentic --set barrikade.enabled=false > /tmp/disabled.yaml
+          ! rg 'app.kubernetes.io/component: barrikade-core' /tmp/disabled.yaml
+          ! rg 'JENTIC__BARRIKADE' /tmp/disabled.yaml
+          rg 'ghcr.io/jentic/jentic-one-app@sha256:' /tmp/disabled.yaml
+
+      - name: Verify enabled combined and parts rendering
+        run: |
+          helm template test deploy/jentic --set barrikade.enabled=true > /tmp/enabled.yaml
+          rg 'app.kubernetes.io/component: barrikade-core' /tmp/enabled.yaml
+          rg 'JENTIC__BARRIKADE__ENABLED' /tmp/enabled.yaml
+          helm template test deploy/jentic --set barrikade.enabled=true --set jentic.mode=parts > /tmp/parts.yaml
+          rg 'test-jentic-registry' /tmp/parts.yaml
+          rg 'test-jentic-broker' /tmp/parts.yaml

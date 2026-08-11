@@ -326,7 +326,12 @@ def main():
     parser.add_argument(
         "--max-workers",
         type=int,
-        default=int(os.getenv("BARRIKADA_MAX_DOWNLOAD_WORKERS", "8")),
+        default=int(
+            os.getenv(
+                "BARRIKADE_MAX_DOWNLOAD_WORKERS",
+                os.getenv("BARRIKADA_MAX_DOWNLOAD_WORKERS", "8"),
+            )
+        ),
         help="Number of concurrent download workers (default: 8)",
     )
 

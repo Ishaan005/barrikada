@@ -1,0 +1,15 @@
+# Barrikade Core fast service runtime (Python 3.12, CPU-only, no Layer E/training tooling)
+chardet==5.2.0
+confusable-homoglyphs==3.3.1
+cryptography==49.0.0
+faiss-cpu==1.13.2
+fastapi==0.136.3
+ftfy==6.3.1
+joblib==1.5.2
+numpy==2.3.4
+onnxruntime==1.26.0
+psycopg[binary]==3.3.2
+pydantic==2.12.3
+scikit-learn==1.7.2
+transformers==5.13.0
+uvicorn==0.38.0

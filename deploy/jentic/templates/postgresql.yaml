@@ -1,0 +1,77 @@
+{{- if and .Values.barrikade.enabled .Values.barrikade.database.internal.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "barrikade-jentic.name" . }}-postgresql
+  labels:
+    {{- include "barrikade-jentic.labels" . | nindent 4 }}
+    app.kubernetes.io/component: barrikade-database
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: barrikade-database
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "barrikade-jentic.name" . }}-postgresql
+  labels:
+    {{- include "barrikade-jentic.labels" . | nindent 4 }}
+    app.kubernetes.io/component: barrikade-database
+spec:
+  serviceName: {{ include "barrikade-jentic.name" . }}-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: barrikade-database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: barrikade-database
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgresql
+          image: {{ .Values.barrikade.database.internal.image | quote }}
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "barrikade-jentic.databaseSecret" . }}
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "barrikade-jentic.databaseSecret" . }}
+                  key: password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "barrikade-jentic.databaseSecret" . }}
+                  key: database
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "barrikade"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.barrikade.database.internal.storage }}
+{{- end }}

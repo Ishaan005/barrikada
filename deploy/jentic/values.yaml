@@ -1,0 +1,69 @@
+# This is the only Barrikade integration value required in normal use.
+barrikade:
+  enabled: false
+
+  image:
+    repository: ghcr.io/barrikade/core
+    tag: "0.2.0"
+    digest: ""
+    pullPolicy: IfNotPresent
+  replicas: 2
+  service:
+    port: 8000
+  timeoutSeconds: 1
+  maxTextBytes: 2097152
+  eventQueueSize: 256
+  modelBundleVersion: "0.2.0"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  token:
+    # Optional production Secret. It must contain `token` and `tokens.json` keys.
+    existingSecret: ""
+  database:
+    # A private PostgreSQL is installed by default. Production may disable it and
+    # point existingSecret at a Secret containing a `url` key.
+    internal:
+      enabled: true
+      image: postgres:16.6-alpine
+      storage: 10Gi
+    existingSecret: ""
+    # Required only with internal.enabled=false. Limits Core's port-5432 egress
+    # to the externally managed PostgreSQL network.
+    externalEgressCIDRs: []
+  modelBundle:
+    # Release Core images contain the verified default bundle. These optional
+    # references replace it with an operator-managed read-only bundle/key.
+    existingClaim: ""
+    publicKeySecret: ""
+    publicKeySecretKey: bundle-public.pem
+
+jentic:
+  version: "0.29.1"
+  mode: combined # combined or parts
+  replicas: 1
+  stockImage:
+    repository: ghcr.io/jentic/jentic-one-app
+    digest: sha256:9a558e431ee814e60109720fb44466582098681578fc039b5c07d57150ec55bd
+    pullPolicy: IfNotPresent
+  barrikadeImage:
+    repository: ghcr.io/barrikade/jentic-one
+    tag: "0.2.0"
+    digest: ""
+    pullPolicy: IfNotPresent
+  # Existing Jentic configuration; unchanged from a normal Jentic deployment.
+  config:
+    existingSecret: ""
+    key: jentic-one.yaml
+  extraEnv: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
