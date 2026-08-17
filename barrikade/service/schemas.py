@@ -46,6 +46,13 @@ class SegmentSource(str, Enum):
     YAML = "yaml"
     PROBLEM = "problem"
     SPECIFICATION = "specification"
+    SPECIFICATION_TITLE = "specification_title"
+    SPECIFICATION_SUMMARY = "specification_summary"
+    SPECIFICATION_DESCRIPTION = "specification_description"
+    SPECIFICATION_DEFAULT = "specification_default"
+    SPECIFICATION_EXAMPLE = "specification_example"
+    SPECIFICATION_EXTERNAL_DOCS = "specification_external_docs"
+    SPECIFICATION_TAGS = "specification_tags"
 
 
 class AssessmentSurface(str, Enum):

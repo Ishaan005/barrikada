@@ -201,8 +201,8 @@ To run the telemetry verification and engine upgrades test suite, use the dedica
 
 ```bash
 # Run isolated telemetry tests
-venv/bin/pytest tests/telemetry/
+.venv/bin/pytest tests/telemetry/
 
 # Or run by markers
-venv/bin/pytest -m telemetry
+.venv/bin/pytest -m telemetry
 ```

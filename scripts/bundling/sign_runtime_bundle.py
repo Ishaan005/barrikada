@@ -20,6 +20,7 @@ REQUIRED_FAST_ARTIFACTS = (
     "layer_c/encoder_onnx/onnx/model.onnx",
     "layer_d/onnx/model.onnx",
     "layer_d/onnx/tokenizer.json",
+    "layer_d/onnx/jentic-reviewed-calibration.json",
     "parity/layer_b.json",
     "parity/layer_c.json",
     "parity/layer_d.json",

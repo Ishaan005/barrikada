@@ -57,7 +57,7 @@ pip install -r requirements.txt
 **Download Layer E from Hugging Face**:
 
 ```bash
-python scripts/download_qwen3guard.py
+python scripts/bundling/download_qwen3guard.py
 ```
 
 **Initialize models directory** (one-time):

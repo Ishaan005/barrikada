@@ -22,7 +22,7 @@ class BarrikadeConfig(BaseModel):
     decompression_ratio_limit: int = Field(default=50, ge=1, le=100)
     runtime_profile: Literal["jentic_gateway_fast"] = "jentic_gateway_fast"
     specification_profile: Literal["jentic_spec"] = "jentic_spec"
-    enforcement_policy: Literal["balanced"] = "balanced"
+    enforcement_policy: Literal["balanced", "shadow"] = "balanced"
 
 
 def get_barrikade_config(app_config) -> BarrikadeConfig:

@@ -1,0 +1,88 @@
+{
+  "approval": {
+    "date": "2026-08-11",
+    "reference": "project-owner-approval-2026-08-11",
+    "reviewer_role": "project_owner",
+    "scope": "all_cases",
+    "status": "approved"
+  },
+  "attribution": [
+    {
+      "homepage": "https://huggingface.co/datasets/nvidia/Nemotron-RL-Agentic-Indirect-Prompt-Injection-v1",
+      "id": "nvidia-agentic-ipi-v1",
+      "license": "CC-BY-4.0",
+      "revision": "d738d4f361cc38bb4d7a42b9066776dade5332f5"
+    },
+    {
+      "homepage": "https://github.com/uiuc-kang-lab/InjecAgent",
+      "id": "injecagent",
+      "license": "MIT",
+      "revision": "f19c9f2c79a41046eb13c03c51a24c567a8ffa07"
+    },
+    {
+      "homepage": "https://github.com/stripe/openapi",
+      "id": "stripe-openapi",
+      "license": "MIT",
+      "revision": "59d34cc45e1b6dc8d7608b9a75edd279e8763dcc"
+    },
+    {
+      "homepage": "https://github.com/github/rest-api-description",
+      "id": "github-rest-api-description",
+      "license": "MIT",
+      "revision": "b26c240ded1c8b79cb0fb09dee4a21239061fa23"
+    },
+    {
+      "homepage": "https://github.com/openai/openai-openapi",
+      "id": "openai-openapi",
+      "license": "MIT",
+      "revision": "577fa92299e000af1616f3be1fec740e3383a86a"
+    },
+    {
+      "homepage": "https://github.com/jentic/jentic-one",
+      "id": "jentic-one-openapi",
+      "license": "Apache-2.0",
+      "revision": "28bb2ee6ef2f0baa307f08e0b6d6014638f5d6c5"
+    }
+  ],
+  "corpus": {
+    "by_surface_label": {
+      "runtime_response:benign": 1200,
+      "runtime_response:prompt_injection": 1176,
+      "specification:benign": 2000,
+      "specification:prompt_injection": 1176
+    },
+    "case_count": 5552,
+    "corpus_sha256": "3e674af3e97a67e58e0f8298cc7acf3c1c7ba88640c2c1c63d6474768750768e",
+    "draft_count": 0,
+    "release_review_ready": true,
+    "reviewed_count": 5552,
+    "schema_version": "jentic-corpus-v1",
+    "splits": {
+      "test": 4000,
+      "validation": 1552
+    }
+  },
+  "leakage_check": {
+    "normalized_text_overlap_count": 0,
+    "training_files": [
+      {
+        "name": "jentic-fast-student-v4.jsonl",
+        "row_count": 19996,
+        "sha256": "ecec58fcd87612c019c3974de46792f1f81f307bdbaba0ee54adb357b1aa92ed"
+      }
+    ]
+  },
+  "reviewed_corpus_file": "reviewed.jsonl",
+  "reviewed_corpus_file_sha256": "7fc3bcf845c273643e505e2ecfe3cb97a8e1252f3c5fb87033a46df3c409103a",
+  "schema_version": 1,
+  "source_manifest_sha256": "6a4bcb637ce90e1076d4e86f931be0bef5d277ef5604b562650fa888e9eaa017",
+  "source_pool": {
+    "name": "jentic-review-pool.jsonl",
+    "sha256": "33b8a600960f9535fcfd18331d9a0937262d1fc6610b0266ddb45ad7752e164b"
+  },
+  "split_policy": {
+    "method": "sha256_family_stratified",
+    "minimum_test_cases_per_surface_label": 1000,
+    "training_rows": 0
+  }
+}

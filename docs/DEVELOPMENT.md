@@ -11,8 +11,8 @@ Development and production are standardized on **Python 3.12**.
 ### Virtual Environment Setup
 1. **Initialize and activate virtual environment:**
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate
+   python3.12 -m venv .venv
+   source .venv/bin/activate
    ```
 2. **Install all packages:**
    ```bash
@@ -28,7 +28,7 @@ To trigger the download manually or skip auto-download:
 - **Trigger manual download:**
   ```bash
   python scripts/bundling/gcs_download.py --bucket barrikade-bundles
-  python scripts/download_qwen3guard.py
+  python scripts/bundling/download_qwen3guard.py
   ```
 - **Skip automatic check** (by setting the bypass environment variable):
   ```bash

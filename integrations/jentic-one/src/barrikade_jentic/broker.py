@@ -62,6 +62,21 @@ class BarrikadeBroker:
         self._config = config
         self._events = event_queue
 
+    @property
+    def _shadow(self) -> bool:
+        return self._config.enforcement_policy == "shadow"
+
+    @staticmethod
+    def _normalized_outcome(outcome: ExecutionOutcome, extraction) -> ExecutionOutcome:
+        normalized_result = RunnerResult(
+            status_code=outcome.result.status_code,
+            body=extraction.body,
+            headers=extraction.headers,
+            content_type=outcome.result.content_type,
+            duration_ms=outcome.result.duration_ms,
+        )
+        return replace(outcome, result=normalized_result)
+
     async def execute(self, request: RunnerRequest, context: ExecutionContext) -> ExecutionOutcome:
         protected_request = replace(request, headers=_identity_encoding(request.headers))
         outcome = await self._delegate.execute(protected_request, context)
@@ -79,11 +94,22 @@ class BarrikadeBroker:
         if extraction.applicability == "incomplete":
             self._emit(
                 "barrikade.content_blocked",
-                "error",
-                "Barrikade blocked an incompletely inspected response",
+                "warning" if self._shadow else "error",
+                (
+                    "Barrikade shadow policy observed an incompletely inspected response"
+                    if self._shadow
+                    else "Barrikade blocked an incompletely inspected response"
+                ),
                 context,
-                {"upstream_status": outcome.result.status_code, "reason": "incomplete"},
+                {
+                    "upstream_status": outcome.result.status_code,
+                    "reason": "incomplete",
+                    "enforced": not self._shadow,
+                    "enforcement_policy": self._config.enforcement_policy,
+                },
             )
+            if self._shadow:
+                return outcome
             raise self._blocked_error(
                 upstream_status=outcome.result.status_code,
                 assessment_id=None,
@@ -119,8 +145,14 @@ class BarrikadeBroker:
                 "error",
                 "Barrikade response assessment failed",
                 context,
-                {"upstream_status": outcome.result.status_code},
+                {
+                    "upstream_status": outcome.result.status_code,
+                    "enforced": not self._shadow,
+                    "enforcement_policy": self._config.enforcement_policy,
+                },
             )
+            if self._shadow:
+                return outcome
             raise RunnerUnavailableError(
                 "The response security scanner is temporarily unavailable.",
                 type="barrikade_scanner_unavailable",
@@ -137,15 +169,23 @@ class BarrikadeBroker:
             "categories": assessment.categories,
             "model_bundle_version": assessment.model_bundle_version,
             "upstream_status": outcome.result.status_code,
+            "enforced": not self._shadow,
+            "enforcement_policy": self._config.enforcement_policy,
         }
         if assessment.status != "complete" or assessment.verdict == "unknown":
             self._emit(
                 "barrikade.content_blocked",
-                "error",
-                "Barrikade blocked an incompletely inspected response",
+                "warning" if self._shadow else "error",
+                (
+                    "Barrikade shadow policy observed an incomplete assessment"
+                    if self._shadow
+                    else "Barrikade blocked an incompletely inspected response"
+                ),
                 context,
                 metadata,
             )
+            if self._shadow:
+                return self._normalized_outcome(outcome, extraction)
             raise self._blocked_error(
                 upstream_status=outcome.result.status_code,
                 assessment_id=assessment.assessment_id,
@@ -156,11 +196,17 @@ class BarrikadeBroker:
         if assessment.verdict == "block":
             self._emit(
                 "barrikade.content_blocked",
-                "error",
-                "Barrikade blocked a tool response",
+                "warning" if self._shadow else "error",
+                (
+                    "Barrikade shadow policy observed a blocked tool response"
+                    if self._shadow
+                    else "Barrikade blocked a tool response"
+                ),
                 context,
                 metadata,
             )
+            if self._shadow:
+                return self._normalized_outcome(outcome, extraction)
             raise self._blocked_error(
                 upstream_status=outcome.result.status_code,
                 assessment_id=assessment.assessment_id,
@@ -176,14 +222,7 @@ class BarrikadeBroker:
                 metadata,
             )
 
-        normalized_result = RunnerResult(
-            status_code=outcome.result.status_code,
-            body=extraction.body,
-            headers=extraction.headers,
-            content_type=outcome.result.content_type,
-            duration_ms=outcome.result.duration_ms,
-        )
-        return replace(outcome, result=normalized_result)
+        return self._normalized_outcome(outcome, extraction)
 
     async def execute_streaming(
         self,

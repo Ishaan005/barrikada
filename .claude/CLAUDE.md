@@ -21,7 +21,7 @@ This repository has automated Claude hooks registered in `.claude/settings.json`
 ## Build, Test & Lint Commands
 
 ### 1. Environment Setup
-- Activate virtual environment: `source venv/bin/activate` or `source .venv/bin/activate`
+- Activate virtual environment: `source .venv/bin/activate`
 - Install dependencies: `pip install -r requirements.txt`
 
 ### 2. Linting & Formatting

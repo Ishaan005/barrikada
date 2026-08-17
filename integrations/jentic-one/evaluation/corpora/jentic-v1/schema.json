@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://barrikade.ai/schemas/jentic-corpus-v1.json",
+  "title": "Barrikade Jentic security corpus case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id", "surface", "content_kind", "label", "expected_verdict", "attack_category",
+    "severity", "family", "split", "review_status", "provenance", "text"
+  ],
+  "properties": {
+    "id": {"type": "string", "pattern": "^jtc-v1-(runtime|spec)-[a-z0-9-]+$"},
+    "surface": {"enum": ["runtime_response", "specification"]},
+    "content_kind": {
+      "enum": [
+        "html",
+        "json_key",
+        "json_value",
+        "problem",
+        "specification",
+        "specification_default",
+        "specification_description",
+        "specification_example",
+        "specification_external_docs",
+        "specification_summary",
+        "specification_tags",
+        "specification_title",
+        "text",
+        "xml",
+        "yaml"
+      ]
+    },
+    "label": {"enum": ["benign", "prompt_injection"]},
+    "expected_verdict": {"enum": ["allow", "flag", "block"]},
+    "attack_category": {"type": ["string", "null"]},
+    "severity": {"enum": ["none", "medium", "high", "critical"]},
+    "family": {"type": "string", "pattern": "^[a-z0-9_-]{2,64}$"},
+    "split": {"enum": ["train", "validation", "test"]},
+    "review_status": {"enum": ["draft", "reviewed"]},
+    "provenance": {"enum": ["curated", "synthetic", "redacted_production"]},
+    "text": {"type": "string", "minLength": 1, "maxLength": 65536}
+  }
+}

@@ -18,15 +18,36 @@ from barrikade_jentic.runtime import get_runtime
 class BarrikadeSpecStage(BasePipelineStage):
     name = "BarrikadeSpecificationAssessment"
 
+    @staticmethod
+    def _emit(runtime, event_type: str, summary: str, data: dict) -> None:
+        runtime.events.emit(
+            SecurityEvent(
+                type=event_type,
+                severity="warning",
+                summary=summary,
+                data=data,
+            )
+        )
+
     async def _run(self, ctx: PipelineContext) -> None:
         config = get_barrikade_config(ctx.config)
         if not config.enabled:
             return
         runtime = get_runtime()
         if runtime is None:
+            if config.enforcement_policy == "shadow":
+                return
             raise IngestStageError("Barrikade specification scanner is unavailable")
         specification = ctx.specification.content
         if not isinstance(specification, dict):
+            if config.enforcement_policy == "shadow":
+                self._emit(
+                    runtime,
+                    "barrikade.scan_failed",
+                    "Barrikade shadow policy could not inspect a specification",
+                    {"reason": "invalid_specification", "enforced": False},
+                )
+                return
             raise IngestStageError("Barrikade could not inspect the specification")
         try:
             digest, segments = extract_specification(
@@ -36,6 +57,14 @@ class BarrikadeSpecStage(BasePipelineStage):
                 max_segments=config.max_segments,
             )
         except ExtractionLimitError:
+            if config.enforcement_policy == "shadow":
+                self._emit(
+                    runtime,
+                    "barrikade.scan_failed",
+                    "Barrikade shadow policy could not completely inspect a specification",
+                    {"reason": "extraction_limit", "enforced": False},
+                )
+                return
             raise IngestStageError(
                 "Barrikade rejected an incompletely inspected specification"
             ) from None
@@ -56,6 +85,18 @@ class BarrikadeSpecStage(BasePipelineStage):
         try:
             assessment = await runtime.client.assess(request)
         except (BarrikadeApiError, httpx.HTTPError, OSError, TimeoutError):
+            if config.enforcement_policy == "shadow":
+                self._emit(
+                    runtime,
+                    "barrikade.scan_failed",
+                    "Barrikade shadow specification assessment failed",
+                    {
+                        "specification_digest": digest,
+                        "enforced": False,
+                        "enforcement_policy": "shadow",
+                    },
+                )
+                return
             raise IngestStageError("Barrikade specification scanner is unavailable") from None
 
         metadata = {
@@ -63,6 +104,8 @@ class BarrikadeSpecStage(BasePipelineStage):
             "categories": assessment.categories,
             "model_bundle_version": assessment.model_bundle_version,
             "specification_digest": digest,
+            "enforced": config.enforcement_policy != "shadow",
+            "enforcement_policy": config.enforcement_policy,
         }
         if assessment.override is not None:
             runtime.events.emit(
@@ -75,6 +118,20 @@ class BarrikadeSpecStage(BasePipelineStage):
             )
             return
         if assessment.status == "complete" and assessment.verdict == "allow":
+            return
+
+        if config.enforcement_policy == "shadow":
+            event_type = (
+                "barrikade.content_flagged"
+                if assessment.status == "complete" and assessment.verdict == "flag"
+                else "barrikade.content_blocked"
+            )
+            self._emit(
+                runtime,
+                event_type,
+                "Barrikade shadow policy observed a rejected specification",
+                metadata,
+            )
             return
 
         locators = {

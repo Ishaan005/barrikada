@@ -24,8 +24,8 @@ where = ["src"]
 include = ["barrikade_jentic", "barrikade_jentic.*"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src", "../../../../Barrikade/Repos/jentic-one/src"]
-testpaths = ["tests"]
+pythonpath = ["src"]
+testpaths = ["tests/plugin"]
 
 [tool.ruff]
 required-version = "==0.15.14"

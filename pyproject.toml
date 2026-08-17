@@ -62,6 +62,7 @@ training = [
   "datasets>=4.4.0",
   "onnx>=1.22.0",
   "onnxmltools>=1.16.0",
+  "optimum-onnx>=0.1.0",
   "pandas>=2.3.0",
   "sentence-transformers>=5.3.0",
   "torch>=2.12.1",
@@ -84,8 +85,8 @@ exclude = ["tests", "tests.*", "docs", "docs.*", "examples", "examples.*", "demo
 # Adds the repo root to sys.path during pytest discovery so tests can
 # `from core.X import ...` without needing `PYTHONPATH=.` set externally.
 # tests/conftest.py notes the assumption; this makes it actually true.
-pythonpath = ["."]
-testpaths = ["tests"]
+pythonpath = [".", "integrations/jentic-one"]
+testpaths = ["tests", "integrations/jentic-one/tests/core"]
 markers = [
     "telemetry: mark tests relating to centralized observability telemetry",
     "slow: mark tests that are slow integration or dataset-driven evaluation tests",
@@ -102,7 +103,6 @@ exclude = [
     ".git",
     ".pytest_cache",
     ".venv",
-    "venv",
     "build",
     "dist",
     "__pycache__",
@@ -130,4 +130,4 @@ explicit-preview-rules = true
 lines-after-imports = 2
 
 [tool.bandit]
-exclude_dirs = ["tests", "venv"]
+exclude_dirs = ["tests", ".venv"]

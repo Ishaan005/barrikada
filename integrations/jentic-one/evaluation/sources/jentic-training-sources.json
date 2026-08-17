@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "dataset_id": "S-Labs/prompt-injection-dataset",
+      "revision": "002a9dd18514abd021869823d6b0429b38606d99",
+      "license": "MIT",
+      "source_url": "https://huggingface.co/datasets/S-Labs/prompt-injection-dataset",
+      "allowed_splits": ["train", "validation"],
+      "excluded_splits": ["test"],
+      "purpose": "fast Layer D prototype training only"
+    },
+    {
+      "dataset_id": "ethz-spylab/agentdojo",
+      "revision": "089ed468cf3ed0322acc66b0211f26d9d90dbf60",
+      "license": "MIT",
+      "source_url": "https://github.com/ethz-spylab/agentdojo",
+      "purpose": "agentic indirect-injection training only",
+      "archive": {
+        "url": "https://codeload.github.com/ethz-spylab/agentdojo/tar.gz/089ed468cf3ed0322acc66b0211f26d9d90dbf60",
+        "sha256": "d7e0ee021be27a69e7e66647979b5a5e0dd10030d38d04ce4102e18a76a228d8",
+        "bytes": 38536984
+      }
+    }
+  ]
+}

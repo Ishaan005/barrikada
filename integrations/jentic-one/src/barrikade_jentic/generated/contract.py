@@ -1,4 +1,4 @@
 """Generated from Barrikade Core OpenAPI. Do not edit manually."""
 
-CONTRACT_SHA256 = "805dad4877bf9ebcc61014817c98cae7c613059caa3140a8e103c894e1e01038"
+CONTRACT_SHA256 = "d13a0666eb3d15be331a4daa976ed05e2eb7a9c18c2f6b73e3022d32a9e7b147"
 CONTRACT_VERSION = "2"

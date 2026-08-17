@@ -1,0 +1,41 @@
+# Self-contained Jentic 0.29.1 configuration used only by plugin compatibility tests.
+databases:
+  registry:
+    backend: sqlite
+    path: .data/registry.db
+    schema_name: registry
+  control:
+    backend: sqlite
+    path: .data/control.db
+    schema_name: control
+  admin:
+    backend: sqlite
+    path: .data/admin.db
+    schema_name: admin
+
+runtime:
+  debug: true
+  log_level: DEBUG
+
+server:
+  host: 127.0.0.1
+  port: 8000
+  reload: false
+
+search:
+  enabled: true
+  search_enabled: true
+  search_mode: lexical
+
+credentials:
+  encryption:
+    active_id: v1
+    entries:
+      - id: v1
+        material: "Z9BctysLqeHhzbFLfSU4djsvAX7N5EVVos5G0QN7C5Q=" # pragma: allowlist secret
+
+observability:
+  metrics:
+    exporter: none
+  tracing:
+    exporter: none

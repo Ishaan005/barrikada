@@ -1,9 +1,15 @@
-# Barrikade
+# Barrikade Core
 
-Barrikade is the open-source core for Barrikade, the runtime security layer for autonomous AI agents. Detect prompt injection and unsafe behavior in real time.
+Barrikade Core is the open-source core for Barrikade, the runtime security layer for autonomous AI agents. Detect prompt injection and unsafe behavior in real time.
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![Python](https://img.shields.io/badge/python-3.12-blue.svg)
+
+## Integrations
+
+- [Jentic One](integrations/jentic-one/README.md) contains the plugin, deployment assets,
+  implementation plans, security corpus, release tooling, examples, and integration tests in one
+  place. Jentic One itself remains unmodified.
 
 ## Why this matters
 
@@ -21,8 +27,8 @@ Barrikade helps detect and route these attacks at runtime through a cost-aware, 
 ## 30-second quick start
 
 ```bash
-python3.12 -m venv venv
-source venv/bin/activate
+python3.12 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
 ```
@@ -39,7 +45,7 @@ constructed, it prepares the model bundle under `~/.barrikade/bundle/` if needed
 Manual downloads:
 ```bash
 python scripts/bundling/gcs_download.py --bucket barrikade-bundles
-python scripts/download_qwen3guard.py
+python scripts/bundling/download_qwen3guard.py
 ```
 
 Programmatic usage:

@@ -14,10 +14,6 @@ from core.settings import Settings
 
 project_root = Path(__file__).resolve().parents[2]
 
-ARTIFACTS = {
-    "model_path": "core/models/layer_c/classifier.joblib",
-}
-
 
 def load_thresholds():
     settings = Settings()
@@ -151,7 +147,7 @@ def test_layer_c():
     low, high = load_thresholds()
 
     classifier = Classifier(
-        **ARTIFACTS,
+        model_path=Settings().model_path,
         low=low,
         high=high,
     )

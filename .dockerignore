@@ -16,13 +16,18 @@ notebooks
 demos
 test_results
 tests
+integrations/jentic-one/docs
+integrations/jentic-one/evaluation
+integrations/jentic-one/examples
+integrations/jentic-one/scripts
+integrations/jentic-one/tests
 
 *.ipynb
 *.csv
 *.parquet
 *.log
 
-# Docker runtime downloads models from GCS at startup.
+# Release builds inject a signed model bundle; raw local artifacts stay outside the build context.
 .cache
 models_cache
 core/models/**

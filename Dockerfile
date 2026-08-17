@@ -47,7 +47,7 @@ COPY core/__init__.py core/__version__.py core/artifacts.py core/incident_report
     core/intent_scorer.py core/onnx_encoder.py core/orchestrator.py core/risk_budget.py \
     core/onnx_parity.py \
     core/session.py core/session_orchestrator.py core/session_settings.py core/settings.py \
-    core/telemetry.py /app/core/
+    core/telemetry.py core/profile_routing.py core/release_policy.py /app/core/
 COPY core/layer_a /app/core/layer_a
 COPY core/layer_b/__init__.py core/layer_b/signature_engine.py /app/core/layer_b/
 COPY core/layer_c/__init__.py core/layer_c/classifier.py /app/core/layer_c/

@@ -18,15 +18,15 @@ _TEXT_CONTENT_TYPES = {
     "application/x-yaml": "yaml",
     "application/problem+xml": "problem",
 }
-_SPEC_KEYS = {
-    "title",
-    "summary",
-    "description",
-    "default",
-    "example",
-    "examples",
-    "externalDocs",
-    "tags",
+_SPEC_SOURCES = {
+    "title": "specification_title",
+    "summary": "specification_summary",
+    "description": "specification_description",
+    "default": "specification_default",
+    "example": "specification_example",
+    "examples": "specification_example",
+    "externalDocs": "specification_external_docs",
+    "tags": "specification_tags",
 }
 _MAX_NESTING_DEPTH = 64
 _MAX_CONTAINER_NODES = 10_000
@@ -315,7 +315,7 @@ def extract_specification(
 
     node_count = [0]
 
-    def walk(value: Any, path: str, selected: bool = False, depth: int = 0) -> None:
+    def walk(value: Any, path: str, selected_source: str | None = None, depth: int = 0) -> None:
         if depth > _MAX_NESTING_DEPTH:
             raise ExtractionLimitError("specification_nesting_limit")
         node_count[0] += 1
@@ -324,14 +324,14 @@ def extract_specification(
         if isinstance(value, dict):
             for key, child in value.items():
                 key_text = str(key)
-                child_selected = selected or key_text in _SPEC_KEYS
+                child_source = _SPEC_SOURCES.get(key_text, selected_source)
                 child_path = _key_locator(path, key_text, "field")
-                walk(child, child_path, child_selected, depth + 1)
+                walk(child, child_path, child_source, depth + 1)
         elif isinstance(value, list):
             for index, child in enumerate(value):
-                walk(child, f"{path}[{index}]", selected, depth + 1)
-        elif selected and isinstance(value, str):
-            collector.add(value, "specification", path)
+                walk(child, f"{path}[{index}]", selected_source, depth + 1)
+        elif selected_source and isinstance(value, str):
+            collector.add(value, selected_source, path)
 
     walk(specification, "$")
     return digest, collector.segments

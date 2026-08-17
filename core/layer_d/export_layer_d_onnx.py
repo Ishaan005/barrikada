@@ -84,7 +84,7 @@ def main():
     # skip would ship an incomplete bundle that still passes the loader sentinel
     # but degrades tokenization. special_tokens_map.json is optional in HF format.
     required_tokenizer_files = ("tokenizer.json", "tokenizer_config.json")
-    optional_tokenizer_files = ("special_tokens_map.json",)
+    optional_tokenizer_files = ("special_tokens_map.json", "jentic-reviewed-calibration.json")
     for name in required_tokenizer_files:
         src_file = src / name
         if not src_file.exists():

@@ -102,13 +102,13 @@ jobs:
 
       - name: Run fast tests (unit and telemetry suites)
         # With the new revamped test organization, fast unit tests and telemetry
-        # verification tests are isolated under tests/unit/ and tests/telemetry/.
-        # Slow evaluation tests are isolated under tests/integration_eval/.
-        # This completely eliminates the need for fragile file-based --ignore lists!
+        # verification tests are isolated under tests/unit/, tests/telemetry/,
+        # and the Jentic integration's Core-facing test folder. Slow evaluation
+        # tests are isolated under tests/integration_eval/.
         env:
           PYTHONPATH: "."
         run: |
-          pytest -q tests/unit/ tests/telemetry/
+          pytest -q tests/unit/ tests/telemetry/ integrations/jentic-one/tests/core/
 
   docker-build:
     name: Production Docker image build
@@ -126,7 +126,7 @@ jobs:
         run: docker build --target production -t barrikada/api:ci .
 
       - name: Build Jentic 0.29.1 overlay image
-        run: docker build -f deploy/jentic/overlay.Dockerfile -t barrikade/jentic-one:ci .
+        run: docker build -f integrations/jentic-one/deploy/overlay.Dockerfile -t barrikade/jentic-one:ci .
 
   jentic-plugin:
     name: Thin Jentic plugin wheel + compatibility tests
@@ -156,7 +156,7 @@ jobs:
       - name: Run plugin tests against Jentic 0.29.1
         env:
           PYTHONPATH: integrations/jentic-one/src
-        run: pytest -q integrations/jentic-one/tests
+        run: pytest -q integrations/jentic-one/tests/plugin
 
   helm:
     name: Single-toggle Helm rendering
@@ -168,20 +168,20 @@ jobs:
           version: v3.16.4
 
       - name: Lint chart
-        run: helm lint deploy/jentic
+        run: helm lint integrations/jentic-one/deploy/helm
 
       - name: Verify disabled rendering is stock Jentic only
         run: |
-          helm template test deploy/jentic --set barrikade.enabled=false > /tmp/disabled.yaml
+          helm template test integrations/jentic-one/deploy/helm --set barrikade.enabled=false > /tmp/disabled.yaml
           ! rg 'app.kubernetes.io/component: barrikade-core' /tmp/disabled.yaml
           ! rg 'JENTIC__BARRIKADE' /tmp/disabled.yaml
           rg 'ghcr.io/jentic/jentic-one-app@sha256:' /tmp/disabled.yaml
 
       - name: Verify enabled combined and parts rendering
         run: |
-          helm template test deploy/jentic --set barrikade.enabled=true > /tmp/enabled.yaml
+          helm template test integrations/jentic-one/deploy/helm --set barrikade.enabled=true > /tmp/enabled.yaml
           rg 'app.kubernetes.io/component: barrikade-core' /tmp/enabled.yaml
           rg 'JENTIC__BARRIKADE__ENABLED' /tmp/enabled.yaml
-          helm template test deploy/jentic --set barrikade.enabled=true --set jentic.mode=parts > /tmp/parts.yaml
+          helm template test integrations/jentic-one/deploy/helm --set barrikade.enabled=true --set jentic.mode=parts > /tmp/parts.yaml
           rg 'test-jentic-registry' /tmp/parts.yaml
           rg 'test-jentic-broker' /tmp/parts.yaml

@@ -9,10 +9,9 @@
 # interpreter `bash\r`. The container then dies at startup with the
 # notoriously misleading error:
 #
-#   exec /app/docker_entrypoint.sh: no such file or directory
+#   exec /app/start.sh: no such file or directory
 #
 # Forcing eol=lf on .sh files (and their Dockerfile sibling) avoids the
 # cross-platform footgun entirely.
 *.sh           text eol=lf
 Dockerfile     text eol=lf
-

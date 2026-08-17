@@ -66,6 +66,7 @@ async def status(identity: Identity = _admin):
         "plugin_version": plugin_version,
         "assessment_api_version": CONTRACT_VERSION,
         "assessment_contract_sha256": CONTRACT_SHA256,
+        "enforcement_policy": runtime.config.enforcement_policy,
     }
     try:
         readiness = await runtime.client.status()

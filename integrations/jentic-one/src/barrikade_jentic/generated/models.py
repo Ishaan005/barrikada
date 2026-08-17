@@ -34,6 +34,13 @@ class TextSegment(ContractModel):
         "yaml",
         "problem",
         "specification",
+        "specification_title",
+        "specification_summary",
+        "specification_description",
+        "specification_default",
+        "specification_example",
+        "specification_external_docs",
+        "specification_tags",
     ]
     locator: str | None = Field(
         default=None,

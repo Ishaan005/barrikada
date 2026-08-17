@@ -4,6 +4,12 @@ import time
 
 from core import configure_safe_runtime
 from core.artifacts import ensure_runtime_artifacts
+from core.profile_routing import JENTIC_FAST_PROFILES, is_low_risk_short_metadata
+from core.release_policy import (
+    LAYER_D_HIGH_THRESHOLD,
+    LAYER_D_LOW_THRESHOLD,
+    LAYER_D_MAX_LENGTH,
+)
 from core.settings import Settings
 from core.telemetry import telemetry
 from models.LayerEResult import LayerEResult
@@ -14,8 +20,22 @@ from models.verdicts import DecisionLayer, FinalVerdict
 log = logging.getLogger(__name__)
 
 
+def layer_d_options(profile: str | None, settings: Settings) -> dict[str, float | int]:
+    if profile in JENTIC_FAST_PROFILES:
+        return {
+            "low": LAYER_D_LOW_THRESHOLD,
+            "high": LAYER_D_HIGH_THRESHOLD,
+            "max_length": LAYER_D_MAX_LENGTH,
+        }
+    return {
+        "low": settings.layer_d_low_threshold,
+        "high": settings.layer_d_high_threshold,
+        "max_length": settings.layer_d_max_length,
+    }
+
+
 class PIPipeline:
-    _FAST_PROFILES = {"jentic_gateway_fast", "jentic_spec"}
+    _FAST_PROFILES = JENTIC_FAST_PROFILES
 
     def __init__(self, profile: str | None = None, prepare_artifacts: bool = True):
         configure_safe_runtime()
@@ -40,11 +60,10 @@ class PIPipeline:
             low=settings.layer_c_low_threshold,
             high=settings.layer_c_high_threshold,
         )
+        runtime_options = layer_d_options(profile, settings)
         self.layer_d_classifier = LayerDClassifier(
             model_dir=settings.layer_d_output_dir,
-            low=settings.layer_d_low_threshold,
-            high=settings.layer_d_high_threshold,
-            max_length=settings.layer_d_max_length,
+            **runtime_options,
         )
         self.layer_e_judge = None
         if profile not in self._FAST_PROFILES:
@@ -187,7 +206,16 @@ class PIPipeline:
             metrics=metrics,
         )
 
-    def detect(self, input_text, workload_id=None, trace_id=None, span_id=None):
+    def detect(
+        self,
+        input_text,
+        workload_id=None,
+        trace_id=None,
+        span_id=None,
+        *,
+        profile: str | None = None,
+        source: str | None = None,
+    ):
         telemetry.record_pipeline_start()
         had_error = False
         layer_errors = []
@@ -198,6 +226,7 @@ class PIPipeline:
             # Layer A
             layer_a_result = self.layer_a_analyze(input_text)
             analysis_text = layer_a_result.processed_text
+            effective_profile = profile or getattr(self, "profile", None)
 
             # Hard-block from Layer A (high-confidence flags)
             if layer_a_result.get_verdict() == "block":
@@ -208,6 +237,36 @@ class PIPipeline:
                     final_verdict=FinalVerdict.BLOCK,
                     decision_layer=DecisionLayer.LAYER_A,
                     confidence_score=layer_a_result.confidence_score,
+                )
+                self._emit_pipeline_telemetry(
+                    res, workload_id, trace_id, span_id, layer_errors=layer_errors
+                )
+                return res
+
+            if is_low_risk_short_metadata(analysis_text, effective_profile, source):
+                res = self._create_result(
+                    input_hash,
+                    start_time,
+                    layer_a_result,
+                    final_verdict=FinalVerdict.ALLOW,
+                    decision_layer=DecisionLayer.LAYER_A,
+                    confidence_score=1.0,
+                )
+                self._emit_pipeline_telemetry(
+                    res, workload_id, trace_id, span_id, layer_errors=layer_errors
+                )
+                return res
+
+            if effective_profile in self._FAST_PROFILES:
+                layer_d_result = self.layer_d_classifier.predict(analysis_text)
+                res = self._create_result(
+                    input_hash,
+                    start_time,
+                    layer_a_result,
+                    layer_d_result=layer_d_result,
+                    final_verdict=FinalVerdict(layer_d_result.verdict),
+                    decision_layer=DecisionLayer.LAYER_D,
+                    confidence_score=layer_d_result.confidence_score,
                 )
                 self._emit_pipeline_telemetry(
                     res, workload_id, trace_id, span_id, layer_errors=layer_errors

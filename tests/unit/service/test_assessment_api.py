@@ -16,7 +16,8 @@ TOKEN = "test-service-token"
 
 
 class _Evaluator:
-    def evaluate(self, text, profile):
+    def evaluate(self, text, profile, source=None):
+        del profile, source
         if "attack" in text:
             return SegmentOutcome(
                 AssessmentVerdict.BLOCK,

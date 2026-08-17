@@ -29,7 +29,9 @@ class SegmentOutcome:
 
 
 class SegmentEvaluator(Protocol):
-    def evaluate(self, text: str, profile: AssessmentProfile) -> SegmentOutcome: ...
+    def evaluate(
+        self, text: str, profile: AssessmentProfile, source: str | None = None
+    ) -> SegmentOutcome: ...
 
 
 class PipelineEvaluator:
@@ -38,8 +40,10 @@ class PipelineEvaluator:
     def __init__(self, pipeline: object) -> None:
         self._pipeline = pipeline
 
-    def evaluate(self, text: str, profile: AssessmentProfile) -> SegmentOutcome:
-        result = self._pipeline.detect(text)
+    def evaluate(
+        self, text: str, profile: AssessmentProfile, source: str | None = None
+    ) -> SegmentOutcome:
+        result = self._pipeline.detect(text, profile=profile.value, source=source)
         verdict = AssessmentVerdict(result.final_verdict.value)
         layer = result.decision_layer.value
         categories: list[str] = []
@@ -83,7 +87,7 @@ class AssessmentService:
         outcomes = await self.runtime.run(
             request.deadline_ms,
             lambda: [
-                self.evaluator.evaluate(segment.text, request.profile)
+                self.evaluator.evaluate(segment.text, request.profile, segment.source.value)
                 for segment in request.segments
             ],
         )

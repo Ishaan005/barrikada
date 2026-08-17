@@ -42,6 +42,9 @@ def main() -> int:
         if not source.is_file():
             raise SystemExit(f"Layer D runtime metadata is missing: {source}")
         shutil.copy2(source, args.dst / name)
+    calibration = args.src / "jentic-reviewed-calibration.json"
+    if calibration.is_file():
+        shutil.copy2(calibration, args.dst / calibration.name)
     if destination_model.stat().st_size >= source_model.stat().st_size:
         raise SystemExit("quantized Layer D model did not reduce artifact size")
     print(

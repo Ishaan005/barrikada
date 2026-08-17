@@ -25,7 +25,6 @@
 /core/models/
 
 # Centralized model storage (downloaded from GCS or bundled from layer outputs)
-# Directory structure preserved with .gitkeep files
 /core/models/layer_b/*.faiss
 /core/models/layer_b/*.npy
 /core/models/layer_b/*.json

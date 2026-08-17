@@ -28,5 +28,5 @@ Please refer to and follow the rules documented in:
 - If proposing/generating commits, always include the `-s` sign-off flag: `git commit -s -m "..."`.
 
 ### 3. Context Awareness
-- This codebase runs on Python 3.10+ (recommend Python 3.11 for development).
+- This codebase requires Python 3.12, matching production and package metadata.
 - Before editing files, review existing code structure to ensure your implementations match the design patterns of surrounding modules.

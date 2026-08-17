@@ -15,9 +15,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 [ -n "$REPO_ROOT" ] || REPO_ROOT="."
 
 # Check for ruff in virtual environments or path
-if [ -x "$REPO_ROOT/venv/bin/ruff" ]; then
-  RUFF="$REPO_ROOT/venv/bin/ruff"
-elif [ -x "$REPO_ROOT/.venv/bin/ruff" ]; then
+if [ -x "$REPO_ROOT/.venv/bin/ruff" ]; then
   RUFF="$REPO_ROOT/.venv/bin/ruff"
 elif command -v ruff >/dev/null 2>&1; then
   RUFF="ruff"

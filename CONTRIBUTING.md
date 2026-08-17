@@ -9,7 +9,7 @@ To maintain the highest level of code quality and engineering velocity, we enfor
 ## 1. Quick Onboarding
 
 ### System Prerequisites
-- **Python 3.10+** (Python 3.11 is recommended to match the production container).
+- **Python 3.12**, matching the production container and package metadata.
 - **Docker** and **Docker Compose** (for running model servers).
 - **Ruff** (for python linting and formatting).
 
@@ -22,8 +22,8 @@ To maintain the highest level of code quality and engineering velocity, we enfor
 
 2. **Initialize and activate virtual environment:**
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate
+   python3.12 -m venv .venv
+   source .venv/bin/activate
    ```
 
 3. **Install dependencies:**
